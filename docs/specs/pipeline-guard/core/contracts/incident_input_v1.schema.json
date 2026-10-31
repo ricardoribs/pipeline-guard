@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pipeline-guard:contracts:incident_input_v1.schema.json",
+  "title": "incident_input_v1",
+  "description": "Normalized incident input, independent of its source (orchestrator, CI, or local execution).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "incident_id",
+    "source",
+    "environment",
+    "pipeline_id",
+    "run_id",
+    "failed_step",
+    "occurred_at",
+    "error_summary",
+    "project_profile"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "incident_id": { "type": "string", "minLength": 1, "description": "Opaque, stable identifier that must not contain PII or secret-shaped values." },
+    "source": { "type": ["string", "null"], "minLength": 1, "description": "External failure source (for example, airflow, ci, or local). When unavailable, use null and provide the reason in unavailable_fields.source." },
+    "environment": { "type": ["string", "null"], "minLength": 1, "description": "When unavailable, use null and provide the reason in unavailable_fields.environment." },
+    "pipeline_id": { "type": ["string", "null"], "minLength": 1, "description": "When unavailable, use null and provide the reason in unavailable_fields.pipeline_id." },
+    "run_id": { "type": ["string", "null"], "minLength": 1, "description": "When unavailable, use null and provide the reason in unavailable_fields.run_id." },
+    "failed_step": { "type": ["string", "null"], "minLength": 1, "description": "When unavailable, use null and provide the reason in unavailable_fields.failed_step." },
+    "occurred_at": { "type": ["string", "null"], "format": "date-time", "description": "UTC timestamp. When unavailable, use null and provide the reason in unavailable_fields.occurred_at." },
+    "error_summary": { "type": ["string", "null"], "minLength": 1, "description": "Secret-free error summary. When unavailable, use null and provide the reason in unavailable_fields.error_summary." },
+    "unavailable_fields": {
+      "type": "object",
+      "description": "Optional map from each unavailable field to a non-empty reason. A listed field must be null, and every null field must be listed.",
+      "minProperties": 1,
+      "propertyNames": {
+        "enum": ["source", "environment", "pipeline_id", "run_id", "failed_step", "occurred_at", "error_summary"]
+      },
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "uri", "hash"],
+        "properties": {
+          "type": { "type": "string" },
+          "uri": { "type": "string", "description": "Authorized reference; never raw content." },
+          "hash": { "type": "string" }
+        }
+      },
+      "default": []
+    },
+    "project_profile": { "type": "string", "minLength": 1, "description": "Configured profile name." },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attempt": { "type": "integer", "minimum": 1 },
+        "signature": { "type": "string" },
+        "related_incident_ids": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "allOf": [
+    { "if": { "properties": { "source": { "type": "null" } }, "required": ["source"] }, "then": { "required": ["unavailable_fields"], "properties": { "unavailable_fields": { "required": ["source"] } } } },
+    { "if": { "properties": { "unavailable_fields": { "required": ["source"] } }, "required": ["unavailable_fields"] }, "then": { "properties": { "source": { "type": "null" } } } },
+    { "if": { "properties": { "environment": { "type": "null" } }, "required": ["environment"] }, "then": { "required": ["unavailable_fields"], "properties": { "unavailable_fields": { "required": ["environment"] } } } },
+    { "if": { "properties": { "unavailable_fields": { "required": ["environment"] } }, "required": ["unavailable_fields"] }, "then": { "properties": { "environment": { "type": "null" } } } },
+    { "if": { "properties": { "pipeline_id": { "type": "null" } }, "required": ["pipeline_id"] }, "then": { "required": ["unavailable_fields"], "properties": { "unavailable_fields": { "required": ["pipeline_id"] } } } },
+    { "if": { "properties": { "unavailable_fields": { "required": ["pipeline_id"] } }, "required": ["unavailable_fields"] }, "then": { "properties": { "pipeline_id": { "type": "null" } } } },
+    { "if": { "properties": { "run_id": { "type": "null" } }, "required": ["run_id"] }, "then": { "required": ["unavailable_fields"], "properties": { "unavailable_fields": { "required": ["run_id"] } } } },
+    { "if": { "properties": { "unavailable_fields": { "required": ["run_id"] } }, "required": ["unavailable_fields"] }, "then": { "properties": { "run_id": { "type": "null" } } } },
+    { "if": { "properties": { "failed_step": { "type": "null" } }, "required": ["failed_step"] }, "then": { "required": ["unavailable_fields"], "properties": { "unavailable_fields": { "required": ["failed_step"] } } } },
+    { "if": { "properties": { "unavailable_fields": { "required": ["failed_step"] } }, "required": ["unavailable_fields"] }, "then": { "properties": { "failed_step": { "type": "null" } } } },
+    { "if": { "properties": { "occurred_at": { "type": "null" } }, "required": ["occurred_at"] }, "then": { "required": ["unavailable_fields"], "properties": { "unavailable_fields": { "required": ["occurred_at"] } } } },
+    { "if": { "properties": { "unavailable_fields": { "required": ["occurred_at"] } }, "required": ["unavailable_fields"] }, "then": { "properties": { "occurred_at": { "type": "null" } } } },
+    { "if": { "properties": { "error_summary": { "type": "null" } }, "required": ["error_summary"] }, "then": { "required": ["unavailable_fields"], "properties": { "unavailable_fields": { "required": ["error_summary"] } } } },
+    { "if": { "properties": { "unavailable_fields": { "required": ["error_summary"] } }, "required": ["unavailable_fields"] }, "then": { "properties": { "error_summary": { "type": "null" } } } }
+  ]
+}

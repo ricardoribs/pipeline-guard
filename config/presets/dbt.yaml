@@ -1,0 +1,128 @@
+# dbt preset for the pipeline-guard plugin.
+#
+# Use this preset for projects that have a dbt_project.yml (e.g. the Delivery
+# Dashboard pilot).  The "dbt" adapter interprets run_results.json,
+# manifest.json, compiled SQL, lineage and test results.
+#
+# No literal credentials are allowed — use environment-variable or secret
+# references in evidence-provider configs instead.
+
+# Schema version of the project configuration (must match the plugin's schema).
+schema_version: "1.0"
+
+# Identifies the consuming project.
+project:
+  # Replace with the actual project identifier.
+  id: "my-dbt-project"
+
+# Pipeline technology and location inside the repository.
+pipeline:
+  # Adapter resolved by the closed Adapter Registry.
+  adapter: "dbt"
+  # Root path of the dbt project relative to the repository root.
+  # Adjust if dbt_project.yml lives in a subdirectory.
+  root: "."
+
+# Source-control metadata (optional — used by the remediation workflow in V2).
+repository:
+  # Repository hosting provider (e.g. "github", "bitbucket", "gitlab").
+  provider: ""
+  # Repository URL.
+  url: ""
+  # Default branch used as the base for draft PRs.
+  default_branch: "main"
+  # Prefix for disposable branches created for approved remediation.
+  remediation_branch_prefix: "pipeline-guard"
+
+# Evidence providers enabled for this project.
+# Each entry must declare at least "name" and "type"; provider-specific
+# configuration goes under "config" and is validated by the provider itself,
+# not by this schema.
+evidence_providers: []
+
+# Validation commands executed after a remediation to verify the fix (V2).
+# Their names are logical dbt commands; the Test Executor runs only the
+# command strings declared here, never a command hardcoded by the adapter.
+# "dbt build" already runs parse, compile, models, tests, seeds and snapshots
+# in DAG order, so only "deps" and "build" are needed here.  Per-stage
+# commands (parse, compile, test) are still supported by the adapter; add them
+# back if your project requires granular validation steps.
+validation:
+  commands:
+    - name: "deps"
+      command: "dbt deps"
+      timeout_seconds: 300
+    - name: "build"
+      command: "dbt build"
+      timeout_seconds: 300
+
+# Safety constraints for the remediation workflow (V2).
+safety:
+  # Glob patterns of paths the plugin is allowed to edit.
+  editable_paths:
+    - "models/**/*.sql"
+    - "tests/**/*.sql"
+    - "macros/**/*.sql"
+    - "analyses/**/*.sql"
+    - "snapshots/**/*.sql"
+  # Allowed file extensions for remediation edits.
+  editable_extensions:
+    - ".sql"
+    - ".yml"
+    - ".yaml"
+  # Glob patterns of paths always blocked for remediation.
+  # Protects data files, installed packages and connection configuration.
+  sensitive_paths:
+    - "seeds/**"
+    - "data/**"
+    - "dbt_packages/**"
+    - "target/**"
+    - "logs/**"
+    - "profiles.yml"
+  limits:
+    # Maximum number of files changed in a single remediation.
+    max_files: 5
+    # Maximum changed lines per file.
+    max_lines_per_file: 200
+    # Maximum changed lines across all files.
+    max_total_lines: 500
+    # Regex patterns that must never appear in changed content.
+    blocked_patterns: []
+
+# Remediation policy (V2).
+remediation:
+  # Whether to allow publishing a draft PR when validation fails or is absent.
+  allow_unvalidated_draft: false
+
+# Non-interactive remediation policy. Keep disabled until the consumer project
+# has reviewed the service identity, secret reference, and execution limits.
+# unattended:
+#   remediation_enabled: false
+#   service_identity: "sp:pipeline-guard"
+#   # Required only when remediation_enabled is true; never put a secret value here.
+#   # authorization_secret_ref: "env:PIPELINE_GUARD_POLICY_SECRET"
+#   # max_model_tokens: 200000
+#   # authorization_max_age_seconds: 900
+#   # target_branch: null
+#   # max_seconds: 3600
+
+# Deterministic diagnosis eligibility policy (V1).
+eligibility:
+  # Version recorded in every eligibility_decision_v1 for auditability.
+  policy_version: "1.0"
+  # LOW-confidence diagnoses are never eligible for code remediation.
+  minimum_confidence: "MEDIUM"
+  # Hypotheses must be escalated instead of entering remediation.
+  require_confirmed_cause: true
+  # Optional boolean signals supplied independently by the orchestrator.
+  required_signals: []
+
+# Runtime settings.
+runtime:
+  # Artifact storage backend ("local" stores under $CLAUDE_PLUGIN_DATA/runs/).
+  artifact_store: "local"
+  # Starter investigation limits; consumer projects may tighten them without changing the plugin.
+  execution_budget:
+    max_tool_calls: 20
+    max_seconds: 600
+    max_tokens: 32000

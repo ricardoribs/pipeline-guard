@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Tests and quality checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+          python-version: "3.12"
+
+      - name: Run offline test suite
+        run: >-
+          uv run --python 3.12
+          --with pytest
+          --with anthropic
+          --with jsonschema
+          --with pyyaml
+          --with requests
+          --with httpx
+          pytest -m "not api" tests/pipeline-guard tests/specs -q
+
+      - name: Check Python formatting
+        run: uv run --python 3.12 --with ruff ruff format --check .
+
+      - name: Lint Python
+        run: uv run --python 3.12 --with ruff ruff check .
+
+      - name: Type-check Python
+        run: uv run --python 3.12 --with basedpyright basedpyright .

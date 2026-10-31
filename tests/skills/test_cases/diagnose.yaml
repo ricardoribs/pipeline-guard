@@ -1,0 +1,49 @@
+skill: diagnose
+
+explicit_cases:
+  threshold: 1.0
+  expect_trigger: true
+  cases:
+    - id: explicit_diagnose_incident
+      prompt: "Use $diagnose to investigate incidents/dbt-run-42.json"
+      description: "Direct diagnosis invocation with an incident path"
+
+    - id: explicit_unknown_result
+      prompt: "Invoke $diagnose and return UNKNOWN if the supplied evidence is insufficient"
+      description: "Direct invocation requests an evidence-bounded diagnosis"
+
+implicit_cases:
+  threshold: 1.0
+  expect_trigger: true
+  cases:
+    - id: implicit_failed_dbt_run
+      prompt: "Diagnose why yesterday's production dbt run failed using its run results and manifest."
+      description: "Incident investigation without an explicit skill name"
+
+    - id: implicit_pipeline_incident
+      prompt: "Investigate this failed CI pipeline run and explain the cause supported by its logs."
+      description: "Evidence-backed diagnosis of a pipeline incident"
+
+    - id: implicit_insufficient_evidence
+      prompt: "Check this pipeline incident and tell me whether the available evidence is enough to confirm a cause."
+      description: "Diagnosis request should run even when evidence may be insufficient"
+
+negative_cases:
+  threshold: 0.8
+  expect_trigger: false
+  cases:
+    - id: negative_plugin_setup
+      prompt: "Set up Pipeline Guard in this repository using the dbt preset."
+      description: "Configuration belongs to the setup skill"
+
+    - id: negative_remediation
+      prompt: "Fix the failing dbt model and open a draft pull request."
+      description: "Code remediation is outside read-only diagnosis"
+
+    - id: negative_existing_config_validation
+      prompt: "Validate the existing Pipeline Guard configuration without diagnosing an incident."
+      description: "Configuration validation alone is not incident diagnosis"
+
+    - id: negative_unrelated_request
+      prompt: "Explain how dbt manifests represent model dependencies."
+      description: "General dbt information without an incident is not diagnosis"

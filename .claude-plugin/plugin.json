@@ -1,0 +1,17 @@
+{
+  "name": "pipeline-guard",
+  "version": "1.0.0",
+  "description": "Diagnoses pipeline failures from traceable evidence and produces tested remediations as draft pull requests after verified approval.",
+  "license": "MIT",
+  "commands": [],
+  "agents": [
+    "./agents/diagnosis-agent.md",
+    "./agents/remediation-agent.md"
+  ],
+  "skills": [
+    "./skills/diagnose",
+    "./skills/pipeline-guard-setup",
+    "./skills/publish-draft-pr",
+    "./skills/remediate"
+  ]
+}

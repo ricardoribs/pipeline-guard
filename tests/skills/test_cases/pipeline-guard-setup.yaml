@@ -1,0 +1,73 @@
+skill: pipeline-guard-setup
+
+explicit_cases:
+  threshold: 1.0
+  expect_trigger: true
+  cases:
+    - id: explicit_skill_name_dbt
+      prompt: "Use $pipeline-guard-setup to configure this repository with the dbt preset"
+      description: "Direct invocation with the dbt preset"
+
+    - id: explicit_skill_name_generic
+      prompt: "Run $pipeline-guard-setup and materialize the generic configuration"
+      description: "Direct invocation with the generic preset"
+
+implicit_cases:
+  threshold: 1.0
+  expect_trigger: true
+  cases:
+    - id: implicit_first_install
+      prompt: "I installed pipeline-guard in a new repository. Create its initial configuration from the generic preset and validate it."
+      description: "First-time pipeline-guard configuration"
+
+    - id: implicit_dbt_project
+      prompt: "This is a dbt project. Materialize the pipeline-guard dbt preset in the consumer repository and verify that the generated configuration is valid."
+      description: "Materialization and validation using the dbt preset"
+
+    - id: implicit_preserve_plugin
+      prompt: "Configure pipeline-guard for this project without editing any of the plugin's bundled files."
+      description: "Consumer configuration must be created without changing plugin files"
+
+contextual_cases:
+  threshold: 0.75
+  expect_trigger: true
+  cases:
+    - id: contextual_missing_config
+      prompt: "We added pipeline-guard to this repository, but it does not have a project configuration yet. Prepare it for first use."
+      description: "A newly installed plugin needs its consumer configuration"
+
+    - id: contextual_selected_dbt
+      prompt: "We chose dbt for the pipeline incident tooling. Create the project-owned YAML it needs before we start diagnosing failures."
+      description: "The dbt selection implies materializing pipeline-guard configuration"
+
+    - id: contextual_safe_initialization
+      prompt: "Initialize pipeline-guard safely and make sure the resulting YAML passes its validator."
+      description: "Safe initialization includes materialization and validation"
+
+    - id: contextual_existing_config
+      prompt: "Set up pipeline-guard here, but do not replace an existing configuration unless I explicitly approve it."
+      description: "Setup request includes the overwrite protection required by the skill"
+
+negative_cases:
+  threshold: 0.8
+  expect_trigger: false
+  cases:
+    - id: negative_diagnose_incident
+      prompt: "Diagnose why yesterday's dbt production run failed."
+      description: "Incident diagnosis belongs to the future diagnose skill"
+
+    - id: negative_remediate_model
+      prompt: "Fix the failing dbt model and open a draft pull request."
+      description: "Code remediation is outside setup"
+
+    - id: negative_validate_existing
+      prompt: "The pipeline-guard configuration already exists. Only validate it; do not recreate or replace it."
+      description: "Standalone validation does not require materialization"
+
+    - id: negative_edit_schema
+      prompt: "Add a new property to the pipeline-guard project configuration schema."
+      description: "Schema development is not consumer setup"
+
+    - id: negative_project_management_setup
+      prompt: "Configure the Project Management plugin and its Bitrix webhook."
+      description: "This belongs to the existing Project Management setup skill"

@@ -1,0 +1,80 @@
+{
+  "description": "Block sensitive diagnosis prompts before model processing and redact diagnosis tool inputs; the headless CLI enforces the same policy internally",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": [
+              "run",
+              "${CLAUDE_PLUGIN_ROOT}/hooks/redact.py",
+              "--hook"
+            ],
+            "timeout": 30,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": [
+              "run",
+              "${CLAUDE_PLUGIN_ROOT}/hooks/enforce_write_paths.py"
+            ],
+            "timeout": 30,
+            "onFailure": "block"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Agent(pipeline-guard:diagnosis-agent)",
+            "command": "uv",
+            "args": [
+              "run",
+              "${CLAUDE_PLUGIN_ROOT}/hooks/redact.py",
+              "--hook"
+            ],
+            "timeout": 30,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(uv run *diagnose_cli.py*)",
+            "command": "uv",
+            "args": [
+              "run",
+              "${CLAUDE_PLUGIN_ROOT}/hooks/redact.py",
+              "--hook"
+            ],
+            "timeout": 30,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(uv run *diagnose_cli.py*)",
+            "command": "uv",
+            "args": [
+              "run",
+              "${CLAUDE_PLUGIN_ROOT}/hooks/redact.py",
+              "--hook"
+            ],
+            "timeout": 30,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

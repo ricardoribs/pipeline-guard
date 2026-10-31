@@ -1,0 +1,46 @@
+# Python bytecode and test/tool caches
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.basedpyright/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local Python environments and build output
+.venv/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Run-specific outputs and internal planning / validation records
+/reports/
+docs/specs/**/plan.md
+docs/specs/**/research.md
+docs/specs/**/tasks.md
+docs/specs/**/tasks.csv
+docs/specs/**/PRD-*.md
+docs/specs/**/v*-exit-gate-report.md
+docs/specs/**/validation_report.md
+docs/specs/**/headless-diagnosis-validation.md
+
+# Local secrets and environment-specific settings
+.env
+.env.*
+!.env.example
+!.env.template
+.claude/settings.local.json
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*.log

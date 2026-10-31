@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pipeline-guard:contracts:pipeline_diagnosis_v1.schema.json",
+  "title": "pipeline_diagnosis_v1",
+  "description": "Structured, read-only diagnosis produced from citable evidence. Decision fields (approved/eligible/next_step/merge/deploy) are never produced by the model.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "incident_id",
+    "failure_family",
+    "confidence",
+    "cause_status",
+    "cause",
+    "evidence_citations"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "incident_id": { "type": "string", "minLength": 1 },
+    "failure_family": {
+      "type": "string",
+      "enum": [
+        "CODE",
+        "DATA",
+        "BUSINESS_RULE",
+        "CONFIGURATION",
+        "DEPENDENCY",
+        "PLATFORM_INFRA",
+        "ACCESS_PERMISSION",
+        "EXTERNAL_SYSTEM",
+        "UNKNOWN"
+      ]
+    },
+    "confidence": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+    "cause_status": { "type": "string", "enum": ["CONFIRMED", "HYPOTHESIS", "UNKNOWN"] },
+    "cause": { "type": "string", "description": "Objective explanation." },
+    "impact_summary": { "type": "string" },
+    "affected_resources": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "evidence_citations": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidence_id", "claim"],
+        "properties": {
+          "evidence_id": { "type": "string", "minLength": 1 },
+          "claim": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "recommended_action": { "type": "string" },
+    "limitations": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "adapter_details": {
+      "type": "object",
+      "description": "Versioned, adapter-specific object (for example, adapter_details.dbt) that does not leak into the core contract."
+    }
+  }
+}

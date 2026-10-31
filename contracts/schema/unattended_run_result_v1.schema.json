@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pipeline-guard:contracts:unattended_run_result_v1.schema.json",
+  "title": "unattended_run_result_v1",
+  "description": "Terminal, sanitized result of one unattended Pipeline Guard execution, written to the host output directory. The outcome and exit_code pairs are fixed so a host can branch on either.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mode",
+    "outcome",
+    "exit_code",
+    "started_at",
+    "finished_at",
+    "decisions",
+    "summary"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "mode": { "const": "unattended" },
+    "outcome": { "enum": ["DRAFT_PR_PUBLISHED", "REPORT_ONLY", "BLOCKED", "LIMIT_REACHED", "ERROR"] },
+    "reason_code": {
+      "enum": [
+        "NOT_ELIGIBLE",
+        "UNKNOWN_CAUSE",
+        "REMEDIATION_DISABLED",
+        "MISSING_INPUT",
+        "AUTHORIZATION_INVALID",
+        "VALIDATION_FAILED",
+        "CHANGE_LIMIT_EXCEEDED",
+        "PR_TARGET_REFUSED",
+        "RECURSION_GUARD",
+        "TIME_LIMIT",
+        "TOKEN_LIMIT",
+        "INVALID_INPUT",
+        "PREREQUISITE_MISSING",
+        "CREDENTIAL_UNAVAILABLE",
+        "MODEL_UNAVAILABLE",
+        "OPERATIONAL_FAILURE"
+      ],
+      "description": "Stable machine-readable reason for every non-success outcome."
+    },
+    "exit_code": { "enum": [0, 1, 2, 3, 4, 5] },
+    "incident_id": { "type": "string", "minLength": 1 },
+    "failure_signature": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "service_identity": { "type": "string", "minLength": 1, "description": "Non-personal identity label configured for the run; never a credential." },
+    "host_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host", "run_reference"],
+      "properties": {
+        "host": { "enum": ["databricks", "bitbucket_pipelines", "airflow", "other"] },
+        "run_reference": { "type": "string", "minLength": 1 },
+        "run_url": { "type": "string", "pattern": "^https://\\S+$" },
+        "related_failed_steps": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      }
+    },
+    "code_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit"],
+      "properties": {
+        "repository_url": { "type": "string", "pattern": "^https://[^/@\\s]+/\\S+$" },
+        "branch": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "duration_seconds": { "type": "number", "minimum": 0 },
+    "config_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "Hash of the validated project configuration that governed the run." },
+    "decisions": {
+      "type": "array",
+      "description": "Every decision point resolved without a person, with how it was resolved (FR-004, FR-005).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "resolution"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "resolution": { "enum": ["INPUT", "CONFIG", "DOCUMENTED_DEFAULT", "SAFE_STOP"] },
+          "value": { "type": ["string", "boolean", "number", "null"] }
+        }
+      }
+    },
+    "diagnosis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_family", "confidence", "cause_status", "diagnosis_hash"],
+      "properties": {
+        "failure_family": { "type": "string" },
+        "confidence": { "type": "string" },
+        "cause_status": { "type": "string" },
+        "cause": { "type": "string" },
+        "diagnosis_hash": { "type": "string", "minLength": 1 }
+      }
+    },
+    "eligibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "rule_id", "policy_version"],
+      "properties": {
+        "decision": { "enum": ["ELIGIBLE_FOR_REMEDIATION", "REPORT_ONLY", "ESCALATE"] },
+        "rule_id": { "type": "string" },
+        "policy_version": { "type": "string" }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "description": "Summary of the policy authorization (approval_input_v1 with channel_type=policy) consumed by the remediation.",
+      "additionalProperties": false,
+      "required": ["channel_type", "actor", "decided_at", "base_commit", "diagnosis_hash", "authenticated"],
+      "properties": {
+        "channel_type": { "const": "policy" },
+        "actor": { "type": "string", "minLength": 1 },
+        "decided_at": { "type": "string", "format": "date-time" },
+        "base_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "diagnosis_hash": { "type": "string", "minLength": 1 },
+        "authenticated": { "const": true },
+        "record_ref": { "type": "string", "description": "Reference to the persisted, signed authorization document." }
+      }
+    },
+    "draft_pr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "reused"],
+      "properties": {
+        "id": { "type": "string" },
+        "url": { "type": "string", "pattern": "^https://\\S+$" },
+        "reused": { "type": "boolean", "description": "True when an open draft PR for the same failure signature already existed (FR-021)." },
+        "source_branch": { "type": "string" },
+        "target_branch": { "type": "string" },
+        "pr_validation_status": { "enum": ["VALIDATED", "PUBLISHED_UNVALIDATED"] }
+      }
+    },
+    "pushed_branch": { "type": "string", "description": "Incident branch already pushed when a later block, limit or operational failure stopped publication." },
+    "remediation_result_ref": { "type": "string", "description": "Reference to the remediation_result_v1 artifact." },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "path", "sha256"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "path": { "type": "string", "minLength": 1, "description": "Path relative to the host output directory." },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "limitations": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string", "minLength": 1, "description": "Sanitized Markdown summary: outcome, diagnosis summary, limitations and the draft PR link when present." }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "exit_code": { "const": 2 } }, "required": ["exit_code"] },
+      "then": true,
+      "else": { "required": ["incident_id", "service_identity", "host_run"] }
+    },
+    {
+      "if": { "required": ["failure_signature"] },
+      "then": { "required": ["code_version"] }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "DRAFT_PR_PUBLISHED" } }, "required": ["outcome"] },
+      "then": {
+        "required": ["draft_pr", "failure_signature", "code_version"],
+        "properties": { "exit_code": { "const": 0 } },
+        "not": { "anyOf": [{ "required": ["reason_code"] }, { "required": ["pushed_branch"] }] }
+      }
+    },
+    {
+      "if": {
+        "properties": { "outcome": { "const": "DRAFT_PR_PUBLISHED" }, "draft_pr": { "properties": { "reused": { "const": false } }, "required": ["reused"] } },
+        "required": ["outcome", "draft_pr"]
+      },
+      "then": { "required": ["diagnosis", "eligibility", "authorization", "remediation_result_ref", "code_version"] }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "REPORT_ONLY" } }, "required": ["outcome"] },
+      "then": {
+        "required": ["reason_code"],
+        "properties": {
+          "exit_code": { "const": 3 },
+          "reason_code": { "enum": ["NOT_ELIGIBLE", "UNKNOWN_CAUSE", "REMEDIATION_DISABLED", "MISSING_INPUT"] }
+        },
+        "not": { "anyOf": [{ "required": ["authorization"] }, { "required": ["draft_pr"] }, { "required": ["pushed_branch"] }] }
+      }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "BLOCKED" } }, "required": ["outcome"] },
+      "then": {
+        "required": ["reason_code"],
+        "properties": {
+          "exit_code": { "const": 4 },
+          "reason_code": { "enum": ["AUTHORIZATION_INVALID", "VALIDATION_FAILED", "CHANGE_LIMIT_EXCEEDED", "PR_TARGET_REFUSED", "RECURSION_GUARD"] }
+        },
+        "not": { "required": ["draft_pr"] }
+      }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "LIMIT_REACHED" } }, "required": ["outcome"] },
+      "then": { "required": ["reason_code"], "properties": { "exit_code": { "const": 5 }, "reason_code": { "enum": ["TIME_LIMIT", "TOKEN_LIMIT"] } }, "not": { "required": ["draft_pr"] } }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "ERROR" } }, "required": ["outcome"] },
+      "then": {
+        "required": ["reason_code"],
+        "oneOf": [
+          {
+            "properties": {
+              "exit_code": { "const": 1 },
+              "reason_code": { "enum": ["CREDENTIAL_UNAVAILABLE", "MODEL_UNAVAILABLE", "OPERATIONAL_FAILURE"] }
+            }
+          },
+          {
+            "properties": {
+              "exit_code": { "const": 2 },
+              "reason_code": { "enum": ["INVALID_INPUT", "PREREQUISITE_MISSING"] }
+            },
+            "not": { "required": ["pushed_branch"] }
+          }
+        ],
+        "not": { "required": ["draft_pr"] }
+      }
+    },
+    {
+      "if": { "properties": { "reason_code": { "const": "PR_TARGET_REFUSED" } }, "required": ["reason_code"] },
+      "then": { "required": ["pushed_branch"] }
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pipeline-guard:contracts:pipeline_adapter_interface.schema.json",
+  "title": "pipeline_adapter_interface",
+  "description": "Structured PipelineAdapter output containing collected evidence and adapter-specific details. The adapter produces evidence and adapter_details; it does not decide eligibility, request approval, or publish a pull request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "adapter_name",
+    "incident_id",
+    "evidences",
+    "adapter_details"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "adapter_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of the registered adapter that produced this output."
+    },
+    "incident_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the processed incident."
+    },
+    "evidences": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidence_id", "origin", "type", "hash", "retention", "content"],
+        "properties": {
+          "evidence_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Unique evidence identifier."
+          },
+          "origin": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Provider that collected the evidence."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["LOG", "ARTIFACT", "METADATA", "QUERY", "LINK"],
+            "description": "Evidence classification."
+          },
+          "hash": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Content hash used for integrity and deduplication."
+          },
+          "retention": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Evidence retention policy."
+          },
+          "content": {
+            "type": "string",
+            "description": "Evidence content."
+          }
+        }
+      }
+    },
+    "adapter_details": {
+      "type": "object",
+      "description": "Versioned, adapter-specific object that does not leak into the interface contract."
+    }
+  }
+}

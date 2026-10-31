@@ -1,0 +1,399 @@
+[
+  {
+    "case_id": "code-missing-column",
+    "expected_failure_family": "CODE",
+    "blind": false,
+    "incident": {
+      "incident_id": "INC-DBT-REF-001",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-001",
+      "failed_step": "dbt build",
+      "occurred_at": "2026-10-06T12:00:00Z",
+      "error_summary": "A dbt model failed while reading an upstream field.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-001"},
+      "results": [
+        {
+          "status": "error",
+          "unique_id": "model.reference.orders_summary",
+          "message": "Database Error: column customer_id does not exist",
+          "compiled_code": "select order_id, customer_id from staging.orders",
+          "adapter_response": {"code": "42703"}
+        }
+      ]
+    },
+    "manifest": {
+      "metadata": {"dbt_version": "1.11.6"},
+      "nodes": {
+        "model.reference.orders_summary": {
+          "name": "orders_summary",
+          "resource_type": "model",
+          "original_file_path": "models/orders_summary.sql",
+          "compiled_code": "select order_id, customer_id from staging.orders",
+          "relation_name": "analytics.orders_summary",
+          "depends_on": {"nodes": ["model.reference.orders"]}
+        }
+      }
+    }
+  },
+  {
+    "case_id": "data-not-null-test",
+    "expected_failure_family": "DATA",
+    "blind": false,
+    "incident": {
+      "incident_id": "INC-DBT-REF-002",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-002",
+      "failed_step": "dbt test",
+      "occurred_at": "2026-10-06T12:01:00Z",
+      "error_summary": "A data quality check found rows with missing required values.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-002"},
+      "results": [
+        {
+          "status": "fail",
+          "unique_id": "test.reference.not_null_orders_id",
+          "resource_type": "test",
+          "name": "not_null_orders_id",
+          "message": "Got 5 results, configured to fail if != 0",
+          "failures": 5,
+          "compiled_code": "select * from orders where id is null"
+        }
+      ]
+    },
+    "manifest": {
+      "metadata": {"dbt_version": "1.11.6"},
+      "nodes": {
+        "test.reference.not_null_orders_id": {
+          "name": "not_null_orders_id",
+          "resource_type": "test",
+          "original_file_path": "models/schema.yml",
+          "depends_on": {"nodes": ["model.reference.orders"]}
+        },
+        "model.reference.orders": {"name": "orders", "resource_type": "model"}
+      }
+    }
+  },
+  {
+    "case_id": "business-rule-revenue-threshold",
+    "expected_failure_family": "BUSINESS_RULE",
+    "blind": false,
+    "incident": {
+      "incident_id": "INC-DBT-REF-003",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-003",
+      "failed_step": "dbt test",
+      "occurred_at": "2026-10-06T12:02:00Z",
+      "error_summary": "The approved revenue rule requires every order total to be positive.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-003"},
+      "results": [
+        {
+          "status": "fail",
+          "unique_id": "test.reference.assert_positive_order_total",
+          "resource_type": "test",
+          "name": "assert_positive_order_total",
+          "message": "Business rule check failed for 2 rows",
+          "failures": 2,
+          "compiled_code": "select * from orders where order_total <= 0"
+        }
+      ]
+    },
+    "manifest": {
+      "metadata": {"dbt_version": "1.11.6"},
+      "nodes": {
+        "test.reference.assert_positive_order_total": {
+          "name": "assert_positive_order_total",
+          "resource_type": "test",
+          "original_file_path": "tests/assert_positive_order_total.sql",
+          "depends_on": {"nodes": ["model.reference.orders"]}
+        },
+        "model.reference.orders": {"name": "orders", "resource_type": "model"}
+      }
+    }
+  },
+  {
+    "case_id": "configuration-missing-variable",
+    "expected_failure_family": "CONFIGURATION",
+    "blind": false,
+    "incident": {
+      "incident_id": "INC-DBT-REF-004",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-004",
+      "failed_step": "dbt compile",
+      "occurred_at": "2026-10-06T12:03:00Z",
+      "error_summary": "Compilation stopped because a required deployment variable was not configured.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-004"},
+      "results": [
+        {
+          "status": "error",
+          "unique_id": "model.reference.daily_metrics",
+          "message": "Required var 'reporting_date' not found in config",
+          "compiled_code": "select * from metrics"
+        }
+      ]
+    },
+    "manifest": {
+      "metadata": {"dbt_version": "1.11.6"},
+      "nodes": {
+        "model.reference.daily_metrics": {
+          "name": "daily_metrics",
+          "resource_type": "model",
+          "original_file_path": "models/daily_metrics.sql"
+        }
+      }
+    }
+  },
+  {
+    "case_id": "dependency-missing-package",
+    "expected_failure_family": "DEPENDENCY",
+    "blind": false,
+    "incident": {
+      "incident_id": "INC-DBT-REF-005",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-005",
+      "failed_step": "dbt deps",
+      "occurred_at": "2026-10-06T12:04:00Z",
+      "error_summary": "The build could not load a macro from a declared dbt package.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-005"},
+      "results": [
+        {
+          "status": "error",
+          "unique_id": "model.reference.customer_rollup",
+          "message": "Compilation Error: macro date_spine was not found in package date_utils",
+          "compiled_code": "select * from source_data"
+        }
+      ]
+    },
+    "manifest": {
+      "metadata": {"dbt_version": "1.11.6"},
+      "nodes": {
+        "model.reference.customer_rollup": {
+          "name": "customer_rollup",
+          "resource_type": "model",
+          "original_file_path": "models/customer_rollup.sql"
+        }
+      }
+    }
+  },
+  {
+    "case_id": "platform-warehouse-timeout",
+    "expected_failure_family": "PLATFORM_INFRA",
+    "blind": false,
+    "incident": {
+      "incident_id": "INC-DBT-REF-006",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-006",
+      "failed_step": "dbt build",
+      "occurred_at": "2026-10-06T12:05:00Z",
+      "error_summary": "The warehouse canceled a query after its execution timeout.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-006"},
+      "results": [
+        {
+          "status": "error",
+          "unique_id": "model.reference.large_fact",
+          "message": "Warehouse query canceled: statement execution timed out",
+          "adapter_response": {"code": "QUERY_TIMEOUT"},
+          "compiled_code": "select * from events"
+        }
+      ]
+    },
+    "manifest": {
+      "metadata": {"dbt_version": "1.11.6"},
+      "nodes": {
+        "model.reference.large_fact": {
+          "name": "large_fact",
+          "resource_type": "model",
+          "original_file_path": "models/large_fact.sql"
+        }
+      }
+    }
+  },
+  {
+    "case_id": "access-permission-denied",
+    "expected_failure_family": "ACCESS_PERMISSION",
+    "blind": false,
+    "incident": {
+      "incident_id": "INC-DBT-REF-007",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-007",
+      "failed_step": "dbt build",
+      "occurred_at": "2026-10-06T12:06:00Z",
+      "error_summary": "The warehouse rejected access to a required relation.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-007"},
+      "results": [
+        {
+          "status": "error",
+          "unique_id": "model.reference.secure_view",
+          "message": "Permission denied for relation secure_source",
+          "adapter_response": {"code": "42501"},
+          "compiled_code": "select * from secure_source"
+        }
+      ]
+    },
+    "manifest": {
+      "metadata": {"dbt_version": "1.11.6"},
+      "nodes": {
+        "model.reference.secure_view": {
+          "name": "secure_view",
+          "resource_type": "model",
+          "original_file_path": "models/secure_view.sql"
+        }
+      }
+    }
+  },
+  {
+    "case_id": "external-source-unavailable",
+    "expected_failure_family": "EXTERNAL_SYSTEM",
+    "blind": false,
+    "incident": {
+      "incident_id": "INC-DBT-REF-008",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-008",
+      "failed_step": "dbt build",
+      "occurred_at": "2026-10-06T12:07:00Z",
+      "error_summary": "A configured upstream service was unavailable while the source model ran.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-008"},
+      "results": [
+        {
+          "status": "error",
+          "unique_id": "model.reference.api_snapshot",
+          "message": "Upstream source request failed with HTTP 503 Service Unavailable",
+          "adapter_response": {"code": "HTTP_503"},
+          "compiled_code": "select * from external_api_source"
+        }
+      ]
+    },
+    "manifest": {
+      "metadata": {"dbt_version": "1.11.6"},
+      "nodes": {
+        "model.reference.api_snapshot": {
+          "name": "api_snapshot",
+          "resource_type": "model",
+          "original_file_path": "models/api_snapshot.sql"
+        }
+      }
+    }
+  },
+  {
+    "case_id": "blind-empty-run-results",
+    "expected_failure_family": "UNKNOWN",
+    "blind": true,
+    "incident": {
+      "incident_id": "INC-DBT-REF-009",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-009",
+      "failed_step": "dbt build",
+      "occurred_at": "2026-10-06T12:08:00Z",
+      "error_summary": "The run was reported as failed, but no component or cause was identified.",
+      "project_profile": "dbt"
+    },
+    "run_results": {"metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-009"}, "results": []},
+    "manifest": {"metadata": {"dbt_version": "1.11.6"}, "nodes": {}}
+  },
+  {
+    "case_id": "blind-generic-run-error",
+    "expected_failure_family": "UNKNOWN",
+    "blind": true,
+    "incident": {
+      "incident_id": "INC-DBT-REF-010",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-010",
+      "failed_step": "dbt build",
+      "occurred_at": "2026-10-06T12:09:00Z",
+      "error_summary": "The run stopped unexpectedly. The available report does not explain why.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-010"},
+      "results": [{"status": "error", "unique_id": "model.reference.unknown_1", "message": "Execution failed"}]
+    },
+    "manifest": {"metadata": {"dbt_version": "1.11.6"}, "nodes": {}}
+  },
+  {
+    "case_id": "blind-conflicting-signals",
+    "expected_failure_family": "UNKNOWN",
+    "blind": true,
+    "incident": {
+      "incident_id": "INC-DBT-REF-011",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-011",
+      "failed_step": "dbt build",
+      "occurred_at": "2026-10-06T12:10:00Z",
+      "error_summary": "The incident report says failure, while the dbt summary records successful nodes only.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-011"},
+      "results": [{"status": "success", "unique_id": "model.reference.unknown_2", "message": "SELECT 12"}]
+    },
+    "manifest": {"metadata": {"dbt_version": "1.11.6"}, "nodes": {}}
+  },
+  {
+    "case_id": "blind-ambiguous-partial-failure",
+    "expected_failure_family": "UNKNOWN",
+    "blind": true,
+    "incident": {
+      "incident_id": "INC-DBT-REF-012",
+      "source": "ci",
+      "environment": "test",
+      "pipeline_id": "daily-dbt-build",
+      "run_id": "run-ref-012",
+      "failed_step": "dbt build",
+      "occurred_at": "2026-10-06T12:11:00Z",
+      "error_summary": "The run reported mixed completion states, but the supplied details are insufficient to identify a cause.",
+      "project_profile": "dbt"
+    },
+    "run_results": {
+      "metadata": {"dbt_version": "1.11.6", "invocation_id": "ref-012"},
+      "results": [
+        {"status": "success", "unique_id": "model.reference.unknown_3", "message": "SELECT 7"},
+        {"status": "partial success", "unique_id": "model.reference.unknown_4", "message": "Partial completion; details unavailable"}
+      ]
+    },
+    "manifest": {"metadata": {"dbt_version": "1.11.6"}, "nodes": {}}
+  }
+]

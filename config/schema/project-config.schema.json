@@ -1,0 +1,313 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pipeline-guard:config:project-config.schema.json",
+  "title": "project_config_v1",
+  "description": "Project configuration for a consumer of the pipeline-guard plugin.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pipeline", "runtime"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the consuming project."
+        }
+      }
+    },
+    "pipeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter"],
+      "properties": {
+        "adapter": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of a registered adapter (e.g. dbt)."
+        },
+        "root": {
+          "type": "string",
+          "description": "Root path of the pipeline project inside the repository."
+        }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Repository provider (e.g. github, bitbucket)."
+        },
+        "url": {
+          "type": "string",
+          "description": "Repository URL."
+        },
+        "default_branch": {
+          "type": "string",
+          "description": "Default branch of the repository."
+        },
+        "remediation_branch_prefix": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Prefix for disposable remediation branches; the incident identifier is appended as a Git-safe branch component."
+        },
+        "push_credential_ref": {
+          "type": "string",
+          "oneOf": [
+            { "pattern": "^env:[A-Z][A-Z0-9_]*$" },
+            { "pattern": "^\\$\\{[A-Z][A-Z0-9_]*\\}$" },
+            { "pattern": "^secret:[A-Za-z0-9][A-Za-z0-9._/-]*$" }
+          ],
+          "description": "Reference to the host-resolved credential used only to push the incident branch; never a literal token."
+        },
+        "allowed_git_operations": {
+          "type": "array",
+          "items": { "const": "push_incident_branch" },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Git operations authorized for a V2 remediation credential."
+        }
+      }
+    },
+    "evidence_providers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "type"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Logical name of the evidence provider."
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Type of the evidence provider."
+          },
+          "config": {
+            "type": "object",
+            "description": "Provider-specific configuration. Type-specific validation is handled internally by the registry."
+          }
+        }
+      },
+      "default": []
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "command"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Logical name of the command."
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Command to execute."
+              },
+              "timeout_seconds": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum execution time, in seconds."
+              }
+            }
+          },
+          "default": []
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "editable_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns of editable paths.",
+          "default": []
+        },
+        "editable_extensions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Allowed file extensions for remediation edits (e.g. .sql, .py).",
+          "default": []
+        },
+        "sensitive_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Glob patterns or bare directory paths always blocked for remediation; any matching path also blocks all descendants (e.g. migrations, seeds).",
+          "default": []
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_files": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum number of changed files."
+            },
+            "max_lines_per_file": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum number of changed lines per file."
+            },
+            "max_total_lines": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum number of changed lines in total."
+            },
+            "blocked_patterns": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Regular-expression patterns that must never appear in changed content.",
+              "default": []
+            }
+          }
+        }
+      }
+    },
+    "remediation": {
+      "type": "object",
+      "description": "Policy settings for the remediation workflow.",
+      "additionalProperties": false,
+      "properties": {
+        "allow_unvalidated_draft": {
+          "type": "boolean",
+          "description": "Whether to allow publishing a draft PR when validation fails or is absent.",
+          "default": false
+        }
+      }
+    },
+    "unattended": {
+      "type": "object",
+      "description": "Versioned policy for non-interactive pipeline-guard runs.",
+      "additionalProperties": false,
+      "required": ["remediation_enabled", "service_identity"],
+      "properties": {
+        "remediation_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Explicit opt-in for unattended remediation. When false, runs only diagnose and report."
+        },
+        "service_identity": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^sp:[a-z][a-z0-9-]*$",
+          "description": "Non-personal service identity recorded in policy authorizations and results. It must use the sp:<name> namespace and is never a credential."
+        },
+        "authorization_secret_ref": {
+          "type": "string",
+          "oneOf": [
+            { "pattern": "^env:[A-Z][A-Z0-9_]*$" },
+            { "pattern": "^\\${[A-Z][A-Z0-9_]*}$" },
+            { "pattern": "^secret:[A-Za-z0-9][A-Za-z0-9._/-]*$" }
+          ],
+          "description": "Reference to the host secret that signs policy authorizations; never a literal value."
+        },
+        "authorization_max_age_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 3600,
+          "default": 900,
+          "description": "Freshness window for a policy authorization."
+        },
+        "target_branch": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Destination branch for unattended draft PRs; null uses the failed branch."
+        },
+        "max_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "default": 3600,
+          "description": "Wall-clock limit for the whole unattended run."
+        },
+        "max_model_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total model token limit for one unattended run."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "remediation_enabled": { "const": true } },
+            "required": ["remediation_enabled"]
+          },
+          "then": { "required": ["authorization_secret_ref", "max_model_tokens"] }
+        }
+      ]
+    },
+    "eligibility": {
+      "type": "object",
+      "description": "Deterministic policy applied after diagnosis validation.",
+      "additionalProperties": false,
+      "properties": {
+        "policy_version": {
+          "type": "string",
+          "minLength": 1,
+          "default": "1.0"
+        },
+        "minimum_confidence": {
+          "type": "string",
+          "enum": ["HIGH", "MEDIUM"],
+          "default": "MEDIUM"
+        },
+        "require_confirmed_cause": {
+          "type": "boolean",
+          "default": true
+        },
+        "required_signals": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "default": []
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["execution_budget"],
+      "properties": {
+        "execution_budget": {
+          "type": "object",
+          "description": "Investigation limits checked before tools and before accepting a diagnosis.",
+          "additionalProperties": false,
+          "required": ["max_tool_calls", "max_seconds", "max_tokens"],
+          "properties": {
+            "max_tool_calls": { "type": "integer", "minimum": 1 },
+            "max_seconds": { "type": "integer", "minimum": 1 },
+            "max_tokens": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Total input and output tokens consumed during investigation."
+            }
+          }
+        },
+        "artifact_store": {
+          "type": "string",
+          "description": "Artifact storage type (e.g. local)."
+        }
+      }
+    }
+  }
+}

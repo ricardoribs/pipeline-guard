@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pipeline-guard:contracts:eligibility_decision_v1.schema.json",
+  "title": "eligibility_decision_v1",
+  "description": "Deterministic decision, not produced by the model, about whether a diagnosis is eligible for code remediation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "incident_id", "decision", "policy_version", "rule_id", "diagnosis_hash"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "incident_id": { "type": "string", "minLength": 1 },
+    "decision": { "type": "string", "enum": ["ELIGIBLE_FOR_REMEDIATION", "REPORT_ONLY", "ESCALATE"] },
+    "policy_version": { "type": "string", "minLength": 1 },
+    "rule_id": { "type": "string", "minLength": 1 },
+    "signals_used": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "reason": { "type": "string" },
+    "limitations": { "type": "array", "items": { "type": "string" }, "default": [] },
+    "diagnosis_hash": { "type": "string", "minLength": 1, "description": "Hash of the evaluated diagnosis." }
+  }
+}

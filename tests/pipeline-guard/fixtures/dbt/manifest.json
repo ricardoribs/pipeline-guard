@@ -1,0 +1,141 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v12.json",
+    "dbt_version": "1.11.6",
+    "generated_at": "2026-10-02T12:00:04Z",
+    "invocation_id": "6500d1a6-b50f-4f23-9034-0e8c4f9d6147",
+    "invocation_started_at": "2026-10-02T12:00:00Z",
+    "env": {},
+    "project_name": "pipeline_guard",
+    "project_id": "pipeline_guard_fixture",
+    "user_id": null,
+    "send_anonymous_usage_stats": false,
+    "adapter_type": "postgres",
+    "quoting": {
+      "database": false,
+      "schema": false,
+      "identifier": false,
+      "column": null
+    },
+    "run_started_at": "2026-10-02T12:00:00Z"
+  },
+  "nodes": {
+    "model.pipeline_guard.stg_orders": {
+      "database": "analytics",
+      "schema": "staging",
+      "name": "stg_orders",
+      "resource_type": "model",
+      "package_name": "pipeline_guard",
+      "path": "staging/stg_orders.sql",
+      "original_file_path": "models/staging/stg_orders.sql",
+      "unique_id": "model.pipeline_guard.stg_orders",
+      "fqn": [
+        "pipeline_guard",
+        "staging",
+        "stg_orders"
+      ],
+      "alias": "stg_orders",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "ad777b1701b1c671ccdce6d380aee42a6a12fa778148f773ddd6f31f8fdda9ce"
+      },
+      "relation_name": "\"analytics\".\"staging\".\"stg_orders\"",
+      "depends_on": {
+        "macros": [],
+        "nodes": []
+      },
+      "compiled": true,
+      "compiled_code": "select * from raw.orders"
+    },
+    "model.pipeline_guard.fct_orders": {
+      "database": "analytics",
+      "schema": "marts",
+      "name": "fct_orders",
+      "resource_type": "model",
+      "package_name": "pipeline_guard",
+      "path": "marts/fct_orders.sql",
+      "original_file_path": "models/marts/fct_orders.sql",
+      "unique_id": "model.pipeline_guard.fct_orders",
+      "fqn": [
+        "pipeline_guard",
+        "marts",
+        "fct_orders"
+      ],
+      "alias": "fct_orders",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "f78bbc664cba782b8b6b60b7cf73a7f04304f201ae15d80ce713c888c302a127"
+      },
+      "relation_name": "\"analytics\".\"marts\".\"fct_orders\"",
+      "depends_on": {
+        "macros": [],
+        "nodes": [
+          "model.pipeline_guard.stg_orders"
+        ]
+      },
+      "compiled": true,
+      "compiled_code": "select order_id, customer_id from analytics.staging.stg_orders"
+    },
+    "test.pipeline_guard.not_null_fct_orders_customer_id.4f3a2b1c": {
+      "database": "analytics",
+      "schema": "dbt_test__audit",
+      "name": "not_null_fct_orders_customer_id",
+      "resource_type": "test",
+      "package_name": "pipeline_guard",
+      "path": "not_null_fct_orders_customer_id.sql",
+      "original_file_path": "models/marts/schema.yml",
+      "unique_id": "test.pipeline_guard.not_null_fct_orders_customer_id.4f3a2b1c",
+      "fqn": [
+        "pipeline_guard",
+        "marts",
+        "not_null_fct_orders_customer_id"
+      ],
+      "alias": "not_null_fct_orders_customer_id",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "3884448d58cc25e3d0af75b7dd31b418b21584fd808ddf0d66971ed2475f1227"
+      },
+      "relation_name": null,
+      "depends_on": {
+        "macros": [
+          "macro.dbt.test_not_null"
+        ],
+        "nodes": [
+          "model.pipeline_guard.fct_orders"
+        ]
+      },
+      "compiled": true,
+      "compiled_code": "select * from analytics.marts.fct_orders where customer_id is null"
+    }
+  },
+  "sources": {},
+  "macros": {},
+  "docs": {},
+  "exposures": {},
+  "metrics": {},
+  "semantic_models": {},
+  "saved_queries": {},
+  "unit_tests": {},
+  "groups": {},
+  "selectors": {},
+  "disabled": {},
+  "parent_map": {
+    "model.pipeline_guard.stg_orders": [],
+    "model.pipeline_guard.fct_orders": [
+      "model.pipeline_guard.stg_orders"
+    ],
+    "test.pipeline_guard.not_null_fct_orders_customer_id.4f3a2b1c": [
+      "model.pipeline_guard.fct_orders"
+    ]
+  },
+  "child_map": {
+    "model.pipeline_guard.stg_orders": [
+      "model.pipeline_guard.fct_orders"
+    ],
+    "model.pipeline_guard.fct_orders": [
+      "test.pipeline_guard.not_null_fct_orders_customer_id.4f3a2b1c"
+    ],
+    "test.pipeline_guard.not_null_fct_orders_customer_id.4f3a2b1c": []
+  },
+  "group_map": {}
+}

@@ -1,0 +1,92 @@
+# Second fictitious consumer project for the pipeline-guard plugin.
+#
+# Uses the dependency-free mock adapter to validate configuration and
+# diagnosis for a second consumer without changes to the plugin core.
+#
+# No literal credentials are allowed; use environment-variable or secret
+# references in evidence-provider configs instead.
+
+# Schema version of the project configuration (must match the plugin's schema).
+schema_version: "1.0"
+
+# Identifies the consuming project.
+project:
+  # Replace with the actual project identifier.
+  id: "pipeline-guard-second-project"
+
+# Pipeline technology and location inside the repository.
+pipeline:
+  # Adapter resolved by the closed Adapter Registry.
+  # "mock" is the dependency-free default; replace with a registered adapter
+  # name (e.g. "dbt") when the project's technology is known.
+  adapter: "mock"
+  # Root path of the pipeline project relative to the repository root.
+  root: "."
+
+# Source-control metadata (optional — used by the remediation workflow in V2).
+repository:
+  # Repository hosting provider (e.g. "github", "bitbucket", "gitlab").
+  provider: ""
+  # Repository URL.
+  url: ""
+  # Default branch used as the base for draft PRs.
+  default_branch: "main"
+  # Prefix for disposable branches created for approved remediation.
+  remediation_branch_prefix: "pipeline-guard"
+
+# Evidence providers enabled for this project.
+# Each entry must declare at least "name" and "type"; provider-specific
+# configuration goes under "config" and is validated by the provider itself,
+# not by this schema.
+evidence_providers: []
+
+# Validation commands executed after a remediation to verify the fix (V2).
+validation:
+  commands: []
+
+# Safety constraints for the remediation workflow (V2).
+safety:
+  # Glob patterns of paths the plugin is allowed to edit.
+  editable_paths: []
+  # Allowed file extensions for remediation edits (e.g. ".sql", ".py").
+  editable_extensions: []
+  # Glob patterns of paths always blocked for remediation
+  # (e.g. migrations, seeds, production configuration).
+  sensitive_paths: []
+  limits:
+    # Maximum number of files changed in a single remediation.
+    max_files: 5
+    # Maximum changed lines per file.
+    max_lines_per_file: 200
+    # Maximum changed lines across all files.
+    max_total_lines: 500
+    # Regex patterns that must never appear in changed content.
+    blocked_patterns: []
+
+# Remediation policy (V2).
+remediation:
+  # Whether to allow publishing a draft PR when validation fails or is absent.
+  allow_unvalidated_draft: false
+
+# Deterministic diagnosis eligibility policy (V1).
+eligibility:
+  # Version recorded in every eligibility_decision_v1 for auditability.
+  policy_version: "1.0"
+  # LOW-confidence diagnoses are never eligible for code remediation.
+  minimum_confidence: "MEDIUM"
+  # Hypotheses must be escalated instead of entering remediation.
+  require_confirmed_cause: true
+  # Optional boolean signals supplied independently by the orchestrator.
+  required_signals: []
+
+# Runtime settings.
+runtime:
+  # Artifact storage backend ("local" stores under $CLAUDE_PLUGIN_DATA/runs/).
+  artifact_store: "local"
+  # Investigation limits for this synthetic consumer project (V1).
+  execution_budget:
+    max_tool_calls: 10
+    max_seconds: 60
+    # Accommodates the conservative local bound used when a governed gateway
+    # exposes Messages but not Anthropic's count_tokens endpoint.
+    max_tokens: 16384

@@ -1,0 +1,102 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/run-results/v6.json",
+    "dbt_version": "1.11.6",
+    "generated_at": "2026-10-02T12:00:04Z",
+    "invocation_id": "6500d1a6-b50f-4f23-9034-0e8c4f9d6147",
+    "invocation_started_at": "2026-10-02T12:00:00Z",
+    "env": {}
+  },
+  "results": [
+    {
+      "status": "success",
+      "timing": [
+        {
+          "name": "compile",
+          "started_at": "2026-10-02T12:00:00Z",
+          "completed_at": "2026-10-02T12:00:00.100000Z"
+        },
+        {
+          "name": "execute",
+          "started_at": "2026-10-02T12:00:00.100000Z",
+          "completed_at": "2026-10-02T12:00:00.500000Z"
+        }
+      ],
+      "thread_id": "Thread-1",
+      "execution_time": 0.5,
+      "adapter_response": {
+        "_message": "SELECT 42",
+        "code": "SELECT",
+        "rows_affected": 42
+      },
+      "message": "SELECT 42",
+      "failures": null,
+      "unique_id": "model.pipeline_guard.stg_orders",
+      "compiled": true,
+      "compiled_code": "select * from raw.orders",
+      "relation_name": "\"analytics\".\"staging\".\"stg_orders\""
+    },
+    {
+      "status": "error",
+      "timing": [
+        {
+          "name": "compile",
+          "started_at": "2026-10-02T12:00:00.500000Z",
+          "completed_at": "2026-10-02T12:00:00.700000Z"
+        },
+        {
+          "name": "execute",
+          "started_at": "2026-10-02T12:00:00.700000Z",
+          "completed_at": "2026-10-02T12:00:01.900000Z"
+        }
+      ],
+      "thread_id": "Thread-2",
+      "execution_time": 1.4,
+      "adapter_response": {
+        "_message": "ERROR",
+        "code": "42703",
+        "rows_affected": -1
+      },
+      "message": "Database Error in model fct_orders (models/marts/fct_orders.sql): column \"customer_id\" does not exist",
+      "failures": null,
+      "unique_id": "model.pipeline_guard.fct_orders",
+      "compiled": true,
+      "compiled_code": "select order_id, customer_id from analytics.staging.stg_orders",
+      "relation_name": "\"analytics\".\"marts\".\"fct_orders\""
+    },
+    {
+      "status": "fail",
+      "timing": [
+        {
+          "name": "compile",
+          "started_at": "2026-10-02T12:00:01.900000Z",
+          "completed_at": "2026-10-02T12:00:02.100000Z"
+        },
+        {
+          "name": "execute",
+          "started_at": "2026-10-02T12:00:02.100000Z",
+          "completed_at": "2026-10-02T12:00:03Z"
+        }
+      ],
+      "thread_id": "Thread-1",
+      "execution_time": 1.1,
+      "adapter_response": {
+        "_message": "SELECT 3",
+        "code": "SELECT",
+        "rows_affected": 3
+      },
+      "message": "Got 3 results, configured to fail if != 0",
+      "failures": 3,
+      "unique_id": "test.pipeline_guard.not_null_fct_orders_customer_id.4f3a2b1c",
+      "compiled": true,
+      "compiled_code": "select * from analytics.marts.fct_orders where customer_id is null",
+      "relation_name": null
+    }
+  ],
+  "elapsed_time": 3.0,
+  "args": {
+    "which": "build",
+    "project_dir": ".",
+    "target_path": "target"
+  }
+}

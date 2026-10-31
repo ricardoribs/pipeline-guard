@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:pipeline-guard:contracts:approval_input_v1.policy_profile.schema.json",
+  "title": "approval_input_v1 — policy authorization profile",
+  "description": "Offline policy profile applied only after the same document passes approval_input_v1 validation. Issued by the unattended entrypoint after ELIGIBLE_FOR_REMEDIATION and an explicit remediation_enabled opt-in, then authenticated by approval_authenticator and validated by approval_validator before any workspace is prepared.",
+  "type": "object",
+  "required": [
+    "decision",
+    "actor",
+    "channel_type",
+    "signature",
+    "base_commit",
+    "external_reference"
+  ],
+  "properties": {
+    "decision": { "const": "APPROVED" },
+    "channel_type": { "const": "policy" },
+    "actor": {
+      "type": "string",
+      "pattern": "^sp:[a-z][a-z0-9-]*$",
+      "description": "unattended.service_identity of the project configuration. It must use the sp:<name> namespace."
+    },
+    "external_reference": {
+      "type": "string",
+      "minLength": 1,
+      "description": "host_run.run_url, or host_run.run_reference when no URL exists."
+    },
+    "signature": {
+      "type": "string",
+      "pattern": "^hmac-sha256:[0-9a-fA-F]{64}$"
+    },
+    "base_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "description": "code_version.commit of the failure context."
+    }
+  }
+}
