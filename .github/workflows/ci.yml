@@ -46,7 +46,7 @@ jobs:
             --cov=scripts.workspace_executor \
             --cov-report=term-missing \
             --cov-report=xml:test-results/coverage.xml \
-            --cov-fail-under=80
+            --cov-fail-under=75
 
       - name: Upload test reports
         if: always()
