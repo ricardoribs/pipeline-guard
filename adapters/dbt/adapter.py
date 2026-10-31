@@ -101,8 +101,12 @@ class DbtAdapter:
             "adapter_details": {
                 "dbt": {
                     "artifacts": {
-                        _RUN_RESULTS_FILE: ("available" if run_results is not None else "missing"),
-                        _MANIFEST_FILE: ("available" if manifest is not None else "missing"),
+                        _RUN_RESULTS_FILE: (
+                            "available" if run_results is not None else "missing"
+                        ),
+                        _MANIFEST_FILE: (
+                            "available" if manifest is not None else "missing"
+                        ),
                     },
                     "dbt_version": _optional_text(metadata.get("dbt_version")),
                     "invocation_id": _optional_text(metadata.get("invocation_id")),
@@ -127,7 +131,9 @@ def _dbt_artifact_declarations(
 
     for index, artifact in enumerate(artifacts):
         if not isinstance(artifact, Mapping):
-            raise DbtArtifactError(f"incident artifact at index {index} must be an object")
+            raise DbtArtifactError(
+                f"incident artifact at index {index} must be an object"
+            )
 
         artifact_type = artifact.get("type")
 
@@ -135,7 +141,9 @@ def _dbt_artifact_declarations(
             continue
 
         if artifact_type in declarations:
-            raise DbtArtifactError(f"incident declares duplicate artifact type {artifact_type!r}")
+            raise DbtArtifactError(
+                f"incident declares duplicate artifact type {artifact_type!r}"
+            )
 
         uri = artifact.get("uri")
         expected_hash = artifact.get("hash")
@@ -182,7 +190,9 @@ def _load_declared_json_object(
         raw_content = raw_bytes.decode("utf-8")
         document: object = json.loads(raw_content)
     except (UnicodeError, json.JSONDecodeError) as error:
-        raise DbtArtifactError(f"could not read dbt artifact {path.name!r}: {error}") from error
+        raise DbtArtifactError(
+            f"could not read dbt artifact {path.name!r}: {error}"
+        ) from error
 
     if not isinstance(document, dict):
         raise DbtArtifactError(f"dbt artifact {path.name!r} must contain a JSON object")
@@ -196,7 +206,9 @@ def _is_sha256_reference(value: Any) -> bool:
         return False
 
     digest = value.removeprefix("sha256:")
-    return len(digest) == 64 and all(character in "0123456789abcdefABCDEF" for character in digest)
+    return len(digest) == 64 and all(
+        character in "0123456789abcdefABCDEF" for character in digest
+    )
 
 
 def _failed_results(
@@ -209,7 +221,9 @@ def _failed_results(
     results = run_results.get("results", [])
 
     if not isinstance(results, list):
-        raise DbtArtifactError("dbt artifact 'run_results.json' field 'results' must be an array")
+        raise DbtArtifactError(
+            "dbt artifact 'run_results.json' field 'results' must be an array"
+        )
 
     failed: list[Mapping[str, Any]] = []
 
@@ -237,7 +251,9 @@ def _manifest_nodes(
     nodes = manifest.get("nodes", {})
 
     if not isinstance(nodes, Mapping):
-        raise DbtArtifactError("dbt artifact 'manifest.json' field 'nodes' must be an object")
+        raise DbtArtifactError(
+            "dbt artifact 'manifest.json' field 'nodes' must be an object"
+        )
 
     return nodes
 
@@ -252,7 +268,9 @@ def _artifact_metadata(
     metadata = run_results.get("metadata", {})
 
     if not isinstance(metadata, Mapping):
-        raise DbtArtifactError("dbt artifact 'run_results.json' field 'metadata' must be an object")
+        raise DbtArtifactError(
+            "dbt artifact 'run_results.json' field 'metadata' must be an object"
+        )
 
     return metadata
 
@@ -321,7 +339,9 @@ def _lineage_node_reference(
     """Create a compact reference to one directly related dbt node."""
     return {
         "unique_id": unique_id,
-        "name": (_optional_text(manifest_node.get("name")) or _name_from_unique_id(unique_id)),
+        "name": (
+            _optional_text(manifest_node.get("name")) or _name_from_unique_id(unique_id)
+        ),
         "resource_type": (
             _optional_text(manifest_node.get("resource_type"))
             or _resource_type_from_unique_id(unique_id)
@@ -358,7 +378,9 @@ def _make_failure_evidence(
             )
         },
         "message": _optional_text(result.get("message")),
-        "name": (_optional_text(manifest_node.get("name")) or _name_from_unique_id(unique_id)),
+        "name": (
+            _optional_text(manifest_node.get("name")) or _name_from_unique_id(unique_id)
+        ),
         "original_file_path": _optional_text(manifest_node.get("original_file_path")),
         "relation_name": _first_text(
             result.get("relation_name"),

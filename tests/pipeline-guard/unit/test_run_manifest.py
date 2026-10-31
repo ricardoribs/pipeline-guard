@@ -50,7 +50,10 @@ def _manifest(**overrides: Any) -> dict[str, Any]:
         "status": "COMPLETED",
         "started_at": STARTED_AT,
         "finished_at": FINISHED_AT,
-        "evidences": [_evidence("evidence-b", "second"), _evidence("evidence-a", "first")],
+        "evidences": [
+            _evidence("evidence-b", "second"),
+            _evidence("evidence-a", "first"),
+        ],
         "limitations": ["warehouse metadata unavailable"],
     }
     values.update(overrides)
@@ -83,7 +86,9 @@ def test_complete_manifest_records_versions_hashes_limitations_and_timing() -> N
     _validate_schema(manifest)
 
 
-def test_current_contract_versions_uses_latest_declared_incident_input_version() -> None:
+def test_current_contract_versions_uses_latest_declared_incident_input_version() -> (
+    None
+):
     versions = current_contract_versions()
 
     assert versions["incident_input_v1"] == "1.1"
@@ -157,7 +162,9 @@ def test_attempt_fingerprint_uses_installation_hmac(tmp_path: Path) -> None:
     key = b"synthetic-test-key".ljust(32, b"0")
     (tmp_path / ".run-id-hmac.key").write_bytes(key)
     payload = {"token": "synthetic-secret"}
-    fingerprint = hmac.new(key, b'{"token":"synthetic-secret"}', hashlib.sha256).hexdigest()
+    fingerprint = hmac.new(
+        key, b'{"token":"synthetic-secret"}', hashlib.sha256
+    ).hexdigest()
     identity = json.dumps(
         {
             "incident_id": "incident-001",
@@ -168,10 +175,15 @@ def test_attempt_fingerprint_uses_installation_hmac(tmp_path: Path) -> None:
         separators=(",", ":"),
     ).encode()
 
-    assert _attempt_run_id(tmp_path, payload) == f"diagnose-{hashlib.sha256(identity).hexdigest()}"
+    assert (
+        _attempt_run_id(tmp_path, payload)
+        == f"diagnose-{hashlib.sha256(identity).hexdigest()}"
+    )
 
 
-def test_identical_attempt_reuses_persisted_key_and_id(tmp_path: Path, monkeypatch) -> None:
+def test_identical_attempt_reuses_persisted_key_and_id(
+    tmp_path: Path, monkeypatch
+) -> None:
     monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(tmp_path))
     payload = {"token": "synthetic-secret"}
     first = _attempt_run_id(tmp_path, payload)
@@ -210,7 +222,9 @@ def test_corrected_secrets_do_not_collide_after_redaction(tmp_path: Path) -> Non
 def test_concurrent_attempts_publish_one_complete_key(tmp_path: Path) -> None:
     with ThreadPoolExecutor(max_workers=8) as executor:
         ids = list(
-            executor.map(lambda _: _attempt_run_id(tmp_path, {"token": "synthetic"}), range(16))
+            executor.map(
+                lambda _: _attempt_run_id(tmp_path, {"token": "synthetic"}), range(16)
+            )
         )
 
     assert len(set(ids)) == 1
@@ -262,7 +276,9 @@ def test_manifest_run_id_without_attempt_payload_remains_backward_compatible() -
         source_run_id="scheduled__2026-10-07T10:00:00+00:00",
     )
 
-    assert run_id == ("diagnose-15bcd9de0dc9786c81360ded0f28722e93a19565dd21224c2189dbabecaaf293")
+    assert run_id == (
+        "diagnose-15bcd9de0dc9786c81360ded0f28722e93a19565dd21224c2189dbabecaaf293"
+    )
 
 
 def test_non_terminal_status_is_rejected_instead_of_waiting_for_human() -> None:
@@ -298,7 +314,9 @@ def test_local_store_persists_and_loads_manifest_by_run_id(tmp_path: Path) -> No
 
     assert persist_run_manifest(manifest, artifact_store=store) is True
     assert store.exists(manifest["run_id"], "manifest.json") is True
-    assert load_run_manifest(run_id=manifest["run_id"], artifact_store=store) == manifest
+    assert (
+        load_run_manifest(run_id=manifest["run_id"], artifact_store=store) == manifest
+    )
     assert (tmp_path / "runs" / manifest["run_id"]).is_dir()
 
 
@@ -312,7 +330,9 @@ def test_identical_manifest_retry_reuses_immutable_artifact(tmp_path: Path) -> N
     assert store.get(manifest["run_id"], "manifest.json") == original
 
 
-def test_semantically_identical_retry_preserves_original_timestamps(tmp_path: Path) -> None:
+def test_semantically_identical_retry_preserves_original_timestamps(
+    tmp_path: Path,
+) -> None:
     store = LocalArtifactStore(plugin_data_dir=tmp_path)
     original = _manifest()
     retry = _manifest(
@@ -326,7 +346,9 @@ def test_semantically_identical_retry_preserves_original_timestamps(tmp_path: Pa
     assert store.get(original["run_id"], "manifest.json") == original_bytes
 
 
-def test_different_manifest_for_same_run_is_rejected_without_overwrite(tmp_path: Path) -> None:
+def test_different_manifest_for_same_run_is_rejected_without_overwrite(
+    tmp_path: Path,
+) -> None:
     store = LocalArtifactStore(plugin_data_dir=tmp_path)
     original = _manifest()
     conflicting = _manifest(limitations=["different limitation"])
@@ -343,7 +365,10 @@ def test_different_manifest_for_same_run_is_rejected_without_overwrite(tmp_path:
 @pytest.mark.parametrize(
     ("evidences", "message"),
     [
-        ([{"evidence_id": "evidence-1", "hash": "sha256:not-a-digest"}], "64 lowercase"),
+        (
+            [{"evidence_id": "evidence-1", "hash": "sha256:not-a-digest"}],
+            "64 lowercase",
+        ),
         (
             [_evidence("duplicate", "first"), _evidence("duplicate", "second")],
             "duplicate evidence_id",

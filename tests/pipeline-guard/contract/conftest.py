@@ -80,7 +80,8 @@ def sample_incident() -> dict:
             "type": artifact_type,
             "uri": f"artifact://dbt/{filename}",
             "hash": (
-                "sha256:" + hashlib.sha256((DBT_FIXTURE_DIR / filename).read_bytes()).hexdigest()
+                "sha256:"
+                + hashlib.sha256((DBT_FIXTURE_DIR / filename).read_bytes()).hexdigest()
             ),
         }
         for filename, artifact_type in (

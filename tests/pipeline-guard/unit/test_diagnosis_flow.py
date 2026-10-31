@@ -55,7 +55,9 @@ def _config():
     return validate_config(PLUGIN_ROOT / "config/projects/second-project.yaml")
 
 
-def test_second_mock_project_produces_real_contracts_and_report_without_project_writes(tmp_path):
+def test_second_mock_project_produces_real_contracts_and_report_without_project_writes(
+    tmp_path,
+):
     before = list(tmp_path.rglob("*"))
     result = run_diagnosis(
         _incident(), project_config=_config(), project_root=tmp_path, runner=_grounded
@@ -84,7 +86,11 @@ def test_budget_exhaustion_discards_speculation_in_the_full_flow(tmp_path, limit
         return _grounded(payload, active_budget, prompt)
 
     result = run_diagnosis(
-        _incident(), project_config=config, project_root=tmp_path, runner=runner, budget=budget
+        _incident(),
+        project_config=config,
+        project_root=tmp_path,
+        runner=runner,
+        budget=budget,
     )
     assert result["exit_code"] == 3
     assert result["diagnosis"]["cause_status"] == "UNKNOWN"

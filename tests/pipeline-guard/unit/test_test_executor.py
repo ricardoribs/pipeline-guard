@@ -9,7 +9,9 @@ from types import ModuleType
 
 import pytest
 
-TEST_EXECUTOR_PATH = Path(__file__).resolve().parents[3] / "scripts" / "test_executor.py"
+TEST_EXECUTOR_PATH = (
+    Path(__file__).resolve().parents[3] / "scripts" / "test_executor.py"
+)
 PLUGIN_ROOT = TEST_EXECUTOR_PATH.parents[1]
 
 if str(PLUGIN_ROOT) not in sys.path:
@@ -17,7 +19,9 @@ if str(PLUGIN_ROOT) not in sys.path:
 
 FAKE_CONFIG = {
     "validation": {
-        "commands": [{"name": "fake-check", "command": "echo ok", "timeout_seconds": 10}]
+        "commands": [
+            {"name": "fake-check", "command": "echo ok", "timeout_seconds": 10}
+        ]
     }
 }
 
@@ -32,7 +36,9 @@ def _load_test_executor_module() -> ModuleType:
         TEST_EXECUTOR_PATH,
     )
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"could not load test executor module from {TEST_EXECUTOR_PATH}")
+        raise RuntimeError(
+            f"could not load test executor module from {TEST_EXECUTOR_PATH}"
+        )
 
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -120,7 +126,9 @@ def test_undeclared_command_never_executes(monkeypatch):
 
 def test_dbt_logical_commands_execute_only_configured_commands(monkeypatch):
     logical_commands = ("deps", "parse", "compile", "test", "build")
-    configured_commands = [f"configured-validation --command {name}" for name in logical_commands]
+    configured_commands = [
+        f"configured-validation --command {name}" for name in logical_commands
+    ]
     executed_commands = []
 
     class _TrackingPopen:
@@ -144,7 +152,9 @@ def test_dbt_logical_commands_execute_only_configured_commands(monkeypatch):
         "validation": {
             "commands": [
                 {"name": name, "command": command, "timeout_seconds": 10}
-                for name, command in zip(logical_commands, configured_commands, strict=True)
+                for name, command in zip(
+                    logical_commands, configured_commands, strict=True
+                )
             ]
         }
     }
@@ -168,7 +178,9 @@ def test_dbt_command_without_config_declaration_never_executes(monkeypatch):
             called.append(True)
 
     monkeypatch.setattr(_test_executor_module.subprocess, "Popen", _TrackingPopen)
-    config = {"validation": {"commands": [{"name": "build", "command": "configured-build"}]}}
+    config = {
+        "validation": {"commands": [{"name": "build", "command": "configured-build"}]}
+    }
 
     executor = TestExecutor(config, run_id="run-dbt-missing")
     with pytest.raises(UndeclaredCommandError, match="test"):
@@ -187,7 +199,9 @@ def test_dbt_adapter_rejects_command_it_does_not_propose(monkeypatch):
             called.append(True)
 
     monkeypatch.setattr(_test_executor_module.subprocess, "Popen", _TrackingPopen)
-    config = {"validation": {"commands": [{"name": "custom", "command": "configured-custom"}]}}
+    config = {
+        "validation": {"commands": [{"name": "custom", "command": "configured-custom"}]}
+    }
 
     executor = TestExecutor(config, run_id="run-dbt-unsupported")
     with pytest.raises(UnsupportedAdapterCommandError, match="custom"):
@@ -198,7 +212,9 @@ def test_dbt_adapter_rejects_command_it_does_not_propose(monkeypatch):
 
 def test_declared_command_records_status_pass(monkeypatch):
     monkeypatch.setattr(
-        _test_executor_module.subprocess, "Popen", _popen_returning(returncode=0, stdout="ok\n")
+        _test_executor_module.subprocess,
+        "Popen",
+        _popen_returning(returncode=0, stdout="ok\n"),
     )
 
     executor = TestExecutor(FAKE_CONFIG, run_id="run-002")
@@ -212,7 +228,9 @@ def test_declared_command_records_status_pass(monkeypatch):
 
 def test_declared_command_records_status_fail(monkeypatch):
     monkeypatch.setattr(
-        _test_executor_module.subprocess, "Popen", _popen_returning(returncode=1, stderr="error")
+        _test_executor_module.subprocess,
+        "Popen",
+        _popen_returning(returncode=1, stderr="error"),
     )
 
     executor = TestExecutor(FAKE_CONFIG, run_id="run-003")
@@ -223,7 +241,9 @@ def test_declared_command_records_status_fail(monkeypatch):
 
 def test_declared_command_records_log_ref_with_store(monkeypatch):
     monkeypatch.setattr(
-        _test_executor_module.subprocess, "Popen", _popen_returning(returncode=0, stdout="ok\n")
+        _test_executor_module.subprocess,
+        "Popen",
+        _popen_returning(returncode=0, stdout="ok\n"),
     )
 
     store = _FakeStore()
@@ -240,7 +260,9 @@ def test_declared_command_records_log_ref_with_store(monkeypatch):
 
 def test_declared_command_records_no_log_ref_without_store(monkeypatch):
     monkeypatch.setattr(
-        _test_executor_module.subprocess, "Popen", _popen_returning(returncode=0, stdout="ok\n")
+        _test_executor_module.subprocess,
+        "Popen",
+        _popen_returning(returncode=0, stdout="ok\n"),
     )
 
     executor = TestExecutor(FAKE_CONFIG, run_id="run-005")
@@ -267,7 +289,9 @@ def test_timeout_records_timeout_status(monkeypatch):
 
     monkeypatch.setattr(_test_executor_module.subprocess, "Popen", _TimeoutPopen)
     if os.name != "nt":
-        monkeypatch.setattr(_test_executor_module.os, "killpg", lambda _pgid, _sig: None)
+        monkeypatch.setattr(
+            _test_executor_module.os, "killpg", lambda _pgid, _sig: None
+        )
 
     executor = TestExecutor(FAKE_CONFIG, run_id="run-006")
     result = executor.run(["fake-check"])
@@ -284,7 +308,9 @@ def test_missing_validation_config_raises():
 
 def test_second_run_with_same_run_id_gets_distinct_log_ref(monkeypatch):
     monkeypatch.setattr(
-        _test_executor_module.subprocess, "Popen", _popen_returning(returncode=0, stdout="ok\n")
+        _test_executor_module.subprocess,
+        "Popen",
+        _popen_returning(returncode=0, stdout="ok\n"),
     )
 
     store = _FakeStore()
@@ -297,7 +323,9 @@ def test_second_run_with_same_run_id_gets_distinct_log_ref(monkeypatch):
     ref2 = result2.results[0].log_ref
 
     assert ref1 != ref2, "log_ref must differ between runs"
-    assert len(store.artifacts) == 2, "both artefacts must be stored, not one overwriting the other"
+    assert len(store.artifacts) == 2, (
+        "both artefacts must be stored, not one overwriting the other"
+    )
 
 
 def test_timeout_terminates_child_processes(monkeypatch):
@@ -369,7 +397,9 @@ def test_two_executor_instances_same_run_id_get_distinct_log_refs(monkeypatch):
     store = _FakeStore()
     config = {
         "validation": {
-            "commands": [{"name": "check", "command": "echo output", "timeout_seconds": 10}]
+            "commands": [
+                {"name": "check", "command": "echo output", "timeout_seconds": 10}
+            ]
         }
     }
 
@@ -382,7 +412,9 @@ def test_two_executor_instances_same_run_id_get_distinct_log_refs(monkeypatch):
     ref1 = result1.results[0].log_ref
     ref2 = result2.results[0].log_ref
 
-    assert ref1 != ref2, "log_ref must differ between executor instances sharing a run_id"
+    assert ref1 != ref2, (
+        "log_ref must differ between executor instances sharing a run_id"
+    )
     assert store.exists("run-shared", ref1), "first log must be retrievable"
     assert store.exists("run-shared", ref2), "second log must be retrievable"
 
@@ -420,7 +452,9 @@ def test_non_utf8_output_is_tolerated_and_next_command_still_runs():
 
 def test_validation_status_all_passed(monkeypatch):
     monkeypatch.setattr(
-        _test_executor_module.subprocess, "Popen", _popen_returning(returncode=0, stdout="ok\n")
+        _test_executor_module.subprocess,
+        "Popen",
+        _popen_returning(returncode=0, stdout="ok\n"),
     )
 
     executor = TestExecutor(FAKE_CONFIG, run_id="run-status-01")
@@ -431,7 +465,9 @@ def test_validation_status_all_passed(monkeypatch):
 
 def test_validation_status_has_failures(monkeypatch):
     monkeypatch.setattr(
-        _test_executor_module.subprocess, "Popen", _popen_returning(returncode=1, stderr="error")
+        _test_executor_module.subprocess,
+        "Popen",
+        _popen_returning(returncode=1, stderr="error"),
     )
 
     executor = TestExecutor(FAKE_CONFIG, run_id="run-status-02")
@@ -442,7 +478,9 @@ def test_validation_status_has_failures(monkeypatch):
 
 def test_validation_status_incomplete_when_no_commands_run(monkeypatch):
     monkeypatch.setattr(
-        _test_executor_module.subprocess, "Popen", _popen_returning(returncode=0, stdout="ok\n")
+        _test_executor_module.subprocess,
+        "Popen",
+        _popen_returning(returncode=0, stdout="ok\n"),
     )
 
     config_empty = {"validation": {"commands": []}}
@@ -470,7 +508,9 @@ def test_validation_status_has_failures_on_timeout(monkeypatch):
 
     monkeypatch.setattr(_test_executor_module.subprocess, "Popen", _TimeoutPopen)
     if os.name != "nt":
-        monkeypatch.setattr(_test_executor_module.os, "killpg", lambda _pgid, _sig: None)
+        monkeypatch.setattr(
+            _test_executor_module.os, "killpg", lambda _pgid, _sig: None
+        )
 
     executor = TestExecutor(FAKE_CONFIG, run_id="run-status-04")
     result = executor.run()
@@ -514,4 +554,6 @@ def test_timeout_kills_child_processes_for_real(tmp_path):
     time.sleep(3.5)
 
     assert result.results[0].status == "TIMEOUT"
-    assert not marker.exists(), "child process must have been killed before writing the marker"
+    assert not marker.exists(), (
+        "child process must have been killed before writing the marker"
+    )

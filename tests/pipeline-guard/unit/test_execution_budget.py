@@ -53,7 +53,9 @@ def _diagnosis() -> dict[str, Any]:
         "confidence": "HIGH",
         "cause_status": "CONFIRMED",
         "cause": "A model failed.",
-        "evidence_citations": [{"evidence_id": "evidence-1", "claim": "Model failure."}],
+        "evidence_citations": [
+            {"evidence_id": "evidence-1", "claim": "Model failure."}
+        ],
     }
 
 
@@ -204,7 +206,9 @@ def test_invalid_token_usage_does_not_change_budget(usage: Any) -> None:
 
 @pytest.mark.parametrize("field", ["max_tool_calls", "max_seconds", "max_tokens"])
 @pytest.mark.parametrize("value", [0, -1, True, 1.5, "10", None])
-def test_invalid_project_limits_are_rejected(tmp_path: Path, field: str, value: object) -> None:
+def test_invalid_project_limits_are_rejected(
+    tmp_path: Path, field: str, value: object
+) -> None:
     config = _config(**{field: value})
     with pytest.raises(ExecutionBudgetConfigurationError, match=field):
         ExecutionBudget(config)

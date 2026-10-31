@@ -53,7 +53,17 @@ _UNPUSHED_DISCARD_CORRECTION = (
     "confirm_unpushed_commits=True after reviewing that their loss is acceptable"
 )
 _AUTHOR_ENVIRONMENT_ALLOWLIST = frozenset(
-    {"PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "LANG", "LC_ALL", "LC_CTYPE", "TZ"}
+    {
+        "PATH",
+        "SYSTEMROOT",
+        "WINDIR",
+        "COMSPEC",
+        "PATHEXT",
+        "LANG",
+        "LC_ALL",
+        "LC_CTYPE",
+        "TZ",
+    }
 )
 
 
@@ -63,7 +73,9 @@ class WorkspaceValidationError(ValueError):
     def __init__(self, field: str, message: str, correction: str) -> None:
         self.field = field
         self.correction = correction
-        super().__init__(f"Invalid workspace input at {field}: {message}. Correction: {correction}")
+        super().__init__(
+            f"Invalid workspace input at {field}: {message}. Correction: {correction}"
+        )
 
 
 class WorkspaceExecutionError(RuntimeError):
@@ -107,13 +119,17 @@ class _RetainedWorkspaceClaim:
         normalized_path = self.path.resolve()
         with _ACTIVE_WORKSPACE_CLAIMS_GUARD:
             if normalized_path in _ACTIVE_WORKSPACE_CLAIMS:
-                raise WorkspaceExecutionError("A preparation for this incident is already active")
+                raise WorkspaceExecutionError(
+                    "A preparation for this incident is already active"
+                )
             _ACTIVE_WORKSPACE_CLAIMS.add(normalized_path)
 
         descriptor: int | None = None
         try:
             if self.path.is_symlink():
-                raise WorkspaceExecutionError("Refusing to use a replaced workspace claim file")
+                raise WorkspaceExecutionError(
+                    "Refusing to use a replaced workspace claim file"
+                )
             flags = os.O_CREAT | os.O_RDWR
             if hasattr(os, "O_NOFOLLOW"):
                 flags |= os.O_NOFOLLOW
@@ -125,7 +141,9 @@ class _RetainedWorkspaceClaim:
                 raise WorkspaceExecutionError("Workspace claim is not a regular file")
             if os.name != "nt":
                 if information.st_uid != os.getuid():
-                    raise WorkspaceExecutionError("Workspace claim has a different owner")
+                    raise WorkspaceExecutionError(
+                        "Workspace claim has a different owner"
+                    )
                 if information.st_mode & 0o077:
                     os.fchmod(descriptor, 0o600)
             if information.st_size == 0:
@@ -204,7 +222,9 @@ class ClonedWorkspace:
         else:
             self._directory = workspace_dir
             if self._directory.is_symlink():
-                raise WorkspaceExecutionError("Refusing to use a replaced workspace directory")
+                raise WorkspaceExecutionError(
+                    "Refusing to use a replaced workspace directory"
+                )
             try:
                 self._directory.mkdir(
                     mode=0o700,
@@ -215,8 +235,13 @@ class ClonedWorkspace:
                 raise WorkspaceExecutionError(
                     "Could not claim the retained workspace directory"
                 ) from None
-            if not self._directory.is_dir() or self._directory.resolve() != self._directory:
-                raise WorkspaceExecutionError("Refusing to use a replaced workspace directory")
+            if (
+                not self._directory.is_dir()
+                or self._directory.resolve() != self._directory
+            ):
+                raise WorkspaceExecutionError(
+                    "Refusing to use a replaced workspace directory"
+                )
         self._parent = self._directory.parent
         self._closed = False
         self._reused = reuse_existing
@@ -277,7 +302,9 @@ class ClonedWorkspace:
                     raise WorkspaceExecutionError("Authorship directory was replaced")
                 directory.mkdir(parents=True, exist_ok=True)
         except OSError:
-            raise WorkspaceExecutionError("Could not prepare the authorship environment") from None
+            raise WorkspaceExecutionError(
+                "Could not prepare the authorship environment"
+            ) from None
         environment = {
             name: value
             for name, value in os.environ.items()
@@ -361,9 +388,13 @@ class ClonedWorkspace:
     def _promote_to(self, directory: Path) -> None:
         """Atomically publish a fully prepared staging clone to its retry key."""
         if self._retained or directory.parent != self._directory.parent:
-            raise WorkspaceExecutionError("The prepared clone cannot be promoted safely")
+            raise WorkspaceExecutionError(
+                "The prepared clone cannot be promoted safely"
+            )
         if directory.exists() or directory.is_symlink():
-            raise WorkspaceExecutionError("A retained workspace already exists for this incident")
+            raise WorkspaceExecutionError(
+                "A retained workspace already exists for this incident"
+            )
         try:
             os.rename(self._directory, directory)
         except OSError:
@@ -379,11 +410,15 @@ class ClonedWorkspace:
         if not home.exists() and not home.is_symlink():
             return
         if home.is_symlink() or home.resolve().parent != self._directory:
-            raise WorkspaceExecutionError("Refusing to clean a replaced authorship directory")
+            raise WorkspaceExecutionError(
+                "Refusing to clean a replaced authorship directory"
+            )
         try:
             shutil.rmtree(home, onexc=_remove_readonly)
         except OSError:
-            raise WorkspaceExecutionError("Could not remove the authorship environment") from None
+            raise WorkspaceExecutionError(
+                "Could not remove the authorship environment"
+            ) from None
 
     def _remove_directory(self) -> None:
         resolved = self._directory.resolve()
@@ -392,12 +427,16 @@ class ClonedWorkspace:
             or resolved != self._directory
             or resolved.parent != self._parent
         ):
-            raise WorkspaceExecutionError("Refusing to clean a replaced temporary directory")
+            raise WorkspaceExecutionError(
+                "Refusing to clean a replaced temporary directory"
+            )
         try:
             if self._directory.exists():
                 shutil.rmtree(self._directory, onexc=_remove_readonly)
         except OSError:
-            raise WorkspaceExecutionError("Could not remove the temporary workspace") from None
+            raise WorkspaceExecutionError(
+                "Could not remove the temporary workspace"
+            ) from None
         self._closed = True
 
 
@@ -450,23 +489,37 @@ def _retained_workspace_directory(inputs: WorkspaceInput, parent_dir: Path) -> P
     identity = (
         f"uid:{os.getuid()}"
         if hasattr(os, "getuid")
-        else "user:" + os.environ.get("USERDOMAIN", "") + "\\" + os.environ.get("USERNAME", "")
+        else "user:"
+        + os.environ.get("USERDOMAIN", "")
+        + "\\"
+        + os.environ.get("USERNAME", "")
     )
     key = hashlib.sha256(
         "\0".join(
-            (identity, inputs.repository_url, inputs.base_branch, inputs.incident_branch)
+            (
+                identity,
+                inputs.repository_url,
+                inputs.base_branch,
+                inputs.incident_branch,
+            )
         ).encode("utf-8")
     ).hexdigest()[:32]
     workspace_dir = parent / f".pipeline-guard-{key}"
     if workspace_dir.is_symlink():
-        raise WorkspaceExecutionError("Refusing to use a replaced workspace cache directory")
+        raise WorkspaceExecutionError(
+            "Refusing to use a replaced workspace cache directory"
+        )
     if workspace_dir.exists():
         if not workspace_dir.is_dir() or workspace_dir.resolve() != workspace_dir:
-            raise WorkspaceExecutionError("Refusing to use a replaced workspace cache directory")
+            raise WorkspaceExecutionError(
+                "Refusing to use a replaced workspace cache directory"
+            )
         if os.name != "nt":
             information = workspace_dir.stat()
             if information.st_uid != os.getuid():
-                raise WorkspaceExecutionError("Workspace cache directory has a different owner")
+                raise WorkspaceExecutionError(
+                    "Workspace cache directory has a different owner"
+                )
             if information.st_mode & 0o077:
                 try:
                     workspace_dir.chmod(0o700)
@@ -479,7 +532,11 @@ def _retained_workspace_directory(inputs: WorkspaceInput, parent_dir: Path) -> P
 
 def _clone_repository(workspace: ClonedWorkspace) -> None:
     clone_url = workspace.inputs.repository_url
-    if "://" not in clone_url and ":" not in clone_url and not Path(clone_url).is_absolute():
+    if (
+        "://" not in clone_url
+        and ":" not in clone_url
+        and not Path(clone_url).is_absolute()
+    ):
         clone_url = str(Path(clone_url).resolve())
     completed = _run_git_command(
         [
@@ -570,7 +627,9 @@ def _reference_commit(
             capture_stdout=True,
         )
     except (OSError, subprocess.TimeoutExpired):
-        raise WorkspaceExecutionError("Git could not inspect workspace references") from None
+        raise WorkspaceExecutionError(
+            "Git could not inspect workspace references"
+        ) from None
     if completed.returncode == 1:
         return None
     if completed.returncode != 0:
@@ -650,7 +709,9 @@ def _write_branch_rebind_event(
     if os.name != "nt":
         information = audit_directory.stat()
         if information.st_uid != os.getuid():
-            raise WorkspaceExecutionError("Branch rebind audit directory has a different owner")
+            raise WorkspaceExecutionError(
+                "Branch rebind audit directory has a different owner"
+            )
         if information.st_mode & 0o077:
             try:
                 audit_directory.chmod(0o700)
@@ -679,7 +740,9 @@ def _write_branch_rebind_event(
     except OSError:
         with suppress(OSError):
             temporary.unlink(missing_ok=True)
-        raise WorkspaceExecutionError("Could not persist the branch rebind audit record") from None
+        raise WorkspaceExecutionError(
+            "Could not persist the branch rebind audit record"
+        ) from None
 
 
 def _branch_rebind_audit_directory(workspace: ClonedWorkspace) -> Path:
@@ -784,7 +847,9 @@ def clone_workspace(
     try:
         _clone_repository(workspace)
     except (OSError, subprocess.TimeoutExpired):
-        error = WorkspaceExecutionError("Git clone could not complete within its execution limit")
+        error = WorkspaceExecutionError(
+            "Git clone could not complete within its execution limit"
+        )
         try:
             workspace.close()
         except Exception as cleanup_exc:
@@ -962,7 +1027,9 @@ def prepare_workspace(
                 "the prepared checkout has missing or changed files",
                 "retry preparation with a complete, clean checkout",
             )
-        local_base_commit = _local_branch_commit(workspace, workspace.inputs.base_branch)
+        local_base_commit = _local_branch_commit(
+            workspace, workspace.inputs.base_branch
+        )
         if local_base_commit != approved:
             base_ref = f"refs/heads/{workspace.inputs.base_branch}"
             if local_base_commit is None:
@@ -1023,7 +1090,9 @@ def discard_prepared_workspace(
         parent_dir if parent_dir is not None else Path(tempfile.gettempdir())
     ).resolve()
     _reject_parent_inside_worktree(workspace_parent)
-    repository_url, base_branch, branch_prefix = _workspace_repository_settings(config_path)
+    repository_url, base_branch, branch_prefix = _workspace_repository_settings(
+        config_path
+    )
     normalized_incident_id = _required_text(incident_id, "incident_id")
     _validate_repository_url(repository_url)
     _validate_branch(base_branch)
@@ -1382,7 +1451,9 @@ def _workspace_git(
             capture_stdout=True,
         )
     except (OSError, subprocess.TimeoutExpired):
-        raise WorkspaceExecutionError("Git could not complete workspace verification") from None
+        raise WorkspaceExecutionError(
+            "Git could not complete workspace verification"
+        ) from None
     if completed.returncode != 0:
         raise WorkspaceValidationError(
             field, "Git could not verify or prepare the workspace", correction
@@ -1411,7 +1482,9 @@ def _local_branch_commit(workspace: ClonedWorkspace, branch: str) -> str | None:
             capture_stdout=True,
         )
     except (OSError, subprocess.TimeoutExpired):
-        raise WorkspaceExecutionError("Git could not inspect the incident branch") from None
+        raise WorkspaceExecutionError(
+            "Git could not inspect the incident branch"
+        ) from None
     if completed.returncode == 1:
         return None
     if completed.returncode != 0:
@@ -1490,13 +1563,19 @@ class _WindowsProcessJob:
                 ],
                 wintypes.BOOL,
             ),
-            "OpenProcess": ([wintypes.DWORD, wintypes.BOOL, wintypes.DWORD], wintypes.HANDLE),
+            "OpenProcess": (
+                [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD],
+                wintypes.HANDLE,
+            ),
             "IsProcessInJob": (
                 [wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.BOOL)],
                 wintypes.BOOL,
             ),
             "WaitForSingleObject": ([wintypes.HANDLE, wintypes.DWORD], wintypes.DWORD),
-            "AssignProcessToJobObject": ([wintypes.HANDLE, wintypes.HANDLE], wintypes.BOOL),
+            "AssignProcessToJobObject": (
+                [wintypes.HANDLE, wintypes.HANDLE],
+                wintypes.BOOL,
+            ),
             "TerminateJobObject": ([wintypes.HANDLE, wintypes.UINT], wintypes.BOOL),
             "CloseHandle": ([wintypes.HANDLE], wintypes.BOOL),
         }
@@ -1508,7 +1587,9 @@ class _WindowsProcessJob:
         self.handle = self.api.CreateJobObjectW(None, None)
         self._check(self.handle)
         limits = _JobExtendedLimits()
-        limits.BasicLimitInformation.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        limits.BasicLimitInformation.LimitFlags = (
+            0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        )
         try:
             self._check(
                 self.api.SetInformationJobObject(
@@ -1547,7 +1628,11 @@ class _WindowsProcessJob:
             accounting = _JobAccounting()
             self._check(
                 self.api.QueryInformationJobObject(
-                    self.handle, 1, ctypes.byref(accounting), ctypes.sizeof(accounting), None
+                    self.handle,
+                    1,
+                    ctypes.byref(accounting),
+                    ctypes.sizeof(accounting),
+                    None,
                 )
             )
             if not accounting.ActiveProcesses:
@@ -1567,7 +1652,8 @@ class _WindowsProcessJob:
         deadline = time.monotonic() + _PROCESS_CLEANUP_SECONDS
         while True:
             buffer = ctypes.create_string_buffer(
-                _JobProcessIds.ProcessIdList.offset + capacity * ctypes.sizeof(ctypes.c_size_t)
+                _JobProcessIds.ProcessIdList.offset
+                + capacity * ctypes.sizeof(ctypes.c_size_t)
             )
             result = self.api.QueryInformationJobObject(
                 self.handle, 3, buffer, ctypes.sizeof(buffer), None
@@ -1578,22 +1664,28 @@ class _WindowsProcessJob:
             if result and information.NumberOfAssignedProcesses <= capacity:
                 break
             if time.monotonic() >= deadline:
-                raise WorkspaceExecutionError("Could not enumerate the Git clone process tree")
+                raise WorkspaceExecutionError(
+                    "Could not enumerate the Git clone process tree"
+                )
             capacity = max(capacity * 2, information.NumberOfAssignedProcesses)
 
-        process_ids = (ctypes.c_size_t * information.NumberOfProcessIdsInList).from_buffer(
-            buffer, _JobProcessIds.ProcessIdList.offset
-        )
+        process_ids = (
+            ctypes.c_size_t * information.NumberOfProcessIdsInList
+        ).from_buffer(buffer, _JobProcessIds.ProcessIdList.offset)
         for pid in process_ids:
             # SYNCHRONIZE | QUERY_LIMITED_INFORMATION; no permission to kill an unrelated PID.
             handle = self.api.OpenProcess(0x101000, False, pid)
-            if not handle and ctypes.get_last_error() == 87:  # Exited before OpenProcess.
+            if (
+                not handle and ctypes.get_last_error() == 87
+            ):  # Exited before OpenProcess.
                 continue
             self._check(handle)
             retained = False
             try:
                 belongs = wintypes.BOOL()
-                self._check(self.api.IsProcessInJob(handle, self.handle, ctypes.byref(belongs)))
+                self._check(
+                    self.api.IsProcessInJob(handle, self.handle, ctypes.byref(belongs))
+                )
                 if belongs.value:
                     self._process_handles.append(handle)
                     retained = True
@@ -1625,7 +1717,9 @@ def _run_git_command(
         "raise SystemExit(result.returncode)\n"
     )
     isolated_env = {
-        name: value for name, value in environment.items() if not name.upper().startswith("PYTHON")
+        name: value
+        for name, value in environment.items()
+        if not name.upper().startswith("PYTHON")
     }
     job = _WindowsProcessJob() if os.name == "nt" else None
     process = None
@@ -1674,7 +1768,9 @@ def _run_git_command(
                             pipe.close()
 
 
-def _remove_readonly(function: Callable[..., object], path: str, error: BaseException) -> None:
+def _remove_readonly(
+    function: Callable[..., object], path: str, error: BaseException
+) -> None:
     """Allow Windows cleanup of read-only Git object files inside the owned directory."""
     if os.name != "nt" or not isinstance(error, PermissionError):
         raise error
@@ -1693,7 +1789,9 @@ def validate_workspace_input(
     The caller supplies a base commit from an already validated approval. This
     function checks its presence, not the approval or the commit's existence.
     """
-    repository_url, base_branch, branch_prefix = _workspace_repository_settings(config_path)
+    repository_url, base_branch, branch_prefix = _workspace_repository_settings(
+        config_path
+    )
     approved_commit = _required_text(base_commit, "base_commit")
     normalized_incident_id = _required_text(incident_id, "incident_id")
     _validate_repository_url(repository_url)
@@ -1713,7 +1811,9 @@ def _workspace_repository_settings(config_path: Path) -> tuple[str, str, str]:
     config = validate_config(config_path)
     repository = config.get("repository", {})
     repository_url = _required_text(repository.get("url"), "$.repository.url")
-    base_branch = _required_text(repository.get("default_branch"), "$.repository.default_branch")
+    base_branch = _required_text(
+        repository.get("default_branch"), "$.repository.default_branch"
+    )
     branch_prefix = _required_text(
         repository.get("remediation_branch_prefix"),
         "$.repository.remediation_branch_prefix",

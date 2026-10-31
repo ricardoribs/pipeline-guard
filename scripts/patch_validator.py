@@ -29,7 +29,9 @@ def _normalize_path(path: object) -> tuple[str, str, str | None]:
         )
     posix_path = PurePosixPath(path)
     if posix_path.is_absolute() or PureWindowsPath(path).drive:
-        raise PatchValidationError(f"path '{path}' is absolute and cannot be used in a patch")
+        raise PatchValidationError(
+            f"path '{path}' is absolute and cannot be used in a patch"
+        )
     policy_parts: list[str] = []
     windows_ambiguous = False
     for segment in posix_path.parts:
@@ -60,16 +62,26 @@ def _normalize_pattern(pattern: object, field: str) -> str:
         raise PatchValidationError(f"{field} entries must be strings")
     normalized = pattern.replace("\\", "/")
     if not normalized or normalized != normalized.strip():
-        raise PatchValidationError(f"{field} entries must be non-empty without surrounding spaces")
+        raise PatchValidationError(
+            f"{field} entries must be non-empty without surrounding spaces"
+        )
     if normalized.startswith("/") or PureWindowsPath(normalized).drive:
         raise PatchValidationError(f"{field} entries must be workspace-relative")
     if ".." in normalized.split("/"):
-        raise PatchValidationError(f"{field} entries must not contain parent-directory segments")
-    if any(part.endswith((".", " ")) for part in normalized.split("/") if part not in {"", "."}):
+        raise PatchValidationError(
+            f"{field} entries must not contain parent-directory segments"
+        )
+    if any(
+        part.endswith((".", " "))
+        for part in normalized.split("/")
+        if part not in {"", "."}
+    ):
         raise PatchValidationError(
             f"{field} entries must not end a path component with a dot or space"
         )
-    normalized = "/".join(part for part in normalized.split("/") if part not in {"", "."})
+    normalized = "/".join(
+        part for part in normalized.split("/") if part not in {"", "."}
+    )
     if not normalized:
         raise PatchValidationError(f"{field} entries must name a path or extension")
     return normalized
@@ -77,8 +89,12 @@ def _normalize_pattern(pattern: object, field: str) -> str:
 
 def _matches_glob(path: str, pattern: str) -> bool:
     """Match safety globs with the same segment semantics as the PreToolUse hook."""
-    path_parts = tuple(part.casefold() for part in path.split("/") if part not in {"", "."})
-    pattern_parts = tuple(part.casefold() for part in pattern.split("/") if part not in {"", "."})
+    path_parts = tuple(
+        part.casefold() for part in path.split("/") if part not in {"", "."}
+    )
+    pattern_parts = tuple(
+        part.casefold() for part in pattern.split("/") if part not in {"", "."}
+    )
 
     @cache
     def matches(path_index: int, pattern_index: int) -> bool:
@@ -155,7 +171,9 @@ def _merge_patch_files(patch_files: Sequence[dict[str, Any]]) -> list[dict[str, 
         policy_path = file_data["policy_path"]
         identity = policy_path.casefold()
         changed_content = file_data["changed_content"]
-        changed_lines = None if changed_content is None else changed_content.splitlines()
+        changed_lines = (
+            None if changed_content is None else changed_content.splitlines()
+        )
         if identity not in merged:
             merged[identity] = {
                 "path": file_data["path"],
@@ -244,7 +262,9 @@ def _parse_diff_header_token(line: bytes, start: int) -> tuple[bytes, int] | Non
             continue
         if ord("0") <= escaped <= ord("7"):
             octal = line[index : index + 3]
-            if len(octal) != 3 or any(byte < ord("0") or byte > ord("7") for byte in octal):
+            if len(octal) != 3 or any(
+                byte < ord("0") or byte > ord("7") for byte in octal
+            ):
                 return None
             decoded.append(int(octal, 8))
             index += 3
@@ -260,7 +280,9 @@ def _parse_git_mode(mode: bytes) -> int | None:
     return int(mode, 8)
 
 
-def _record_git_mode(file_data: dict[str, Any], mode: int, violations: list[str]) -> None:
+def _record_git_mode(
+    file_data: dict[str, Any], mode: int, violations: list[str]
+) -> None:
     """Reject Git entry types that cannot be validated by path policy."""
     modes: set[int] = file_data["modes"]
     if mode in modes:
@@ -279,10 +301,14 @@ def _record_git_mode(file_data: dict[str, Any], mode: int, violations: list[str]
             "validated against path safety controls"
         )
     elif mode not in {0o100644, 0o100755}:
-        violations.append(f"applied_patch contains unsupported Git mode {mode:06o} for '{path}'")
+        violations.append(
+            f"applied_patch contains unsupported Git mode {mode:06o} for '{path}'"
+        )
 
 
-def _parse_applied_patch(applied_patch: bytes) -> tuple[list[dict[str, Any]], list[str]]:
+def _parse_applied_patch(
+    applied_patch: bytes,
+) -> tuple[list[dict[str, Any]], list[str]]:
     """Parse paths, changed-line counts, and added lines from a Git binary/text diff.
 
     A binary patch is rejected for volume and content validation: its changed
@@ -400,7 +426,9 @@ def _parse_applied_patch(applied_patch: bytes) -> tuple[list[dict[str, Any]], li
             try:
                 _display_path, policy_path, ambiguity_violation = _normalize_path(path)
             except PatchValidationError as error:
-                violations.append(f"applied_patch has an invalid diff --git path: {error}")
+                violations.append(
+                    f"applied_patch has an invalid diff --git path: {error}"
+                )
                 continue
             if ambiguity_violation is not None:
                 violations.append(f"applied_patch {ambiguity_violation}")
@@ -459,7 +487,9 @@ def _parse_applied_patch(applied_patch: bytes) -> tuple[list[dict[str, Any]], li
             )
             continue
         try:
-            file_data["changed_content"] = b"\n".join(file_data["changed_lines"]).decode("utf-8")
+            file_data["changed_content"] = b"\n".join(
+                file_data["changed_lines"]
+            ).decode("utf-8")
         except UnicodeDecodeError:
             violations.append(
                 f"applied_patch contains non-UTF-8 added content for '{file_data['path']}'"
@@ -472,7 +502,9 @@ def _reconcile_applied_patch(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Reject metadata unless paths, counts, and added content equal applied diff bytes."""
     applied_files, violations = _parse_applied_patch(applied_patch)
-    expected_files = {file_data["policy_path"].casefold(): file_data for file_data in patch_files}
+    expected_files = {
+        file_data["policy_path"].casefold(): file_data for file_data in patch_files
+    }
     applied_by_path = {
         file_data["policy_path"].casefold(): file_data for file_data in applied_files
     }
@@ -547,7 +579,9 @@ def validate_patch(
     patch_hash = _hash_applied_patch(applied_patch)
     normalized_files, violations = _normalise_patch_files(patch_files)
     requires_human_review = bool(violations)
-    if not isinstance(config, Mapping) or not isinstance(config.get("safety", {}), Mapping):
+    if not isinstance(config, Mapping) or not isinstance(
+        config.get("safety", {}), Mapping
+    ):
         raise PatchValidationError("config.safety must be an object")
 
     safety = config.get("safety", {})
@@ -556,7 +590,8 @@ def validate_patch(
     sensitive_paths = safety.get("sensitive_paths") or []
     limits = safety.get("limits") or {}
     if not all(
-        isinstance(value, list) for value in (editable_extensions, editable_paths, sensitive_paths)
+        isinstance(value, list)
+        for value in (editable_extensions, editable_paths, sensitive_paths)
     ):
         raise PatchValidationError("safety path and extension controls must be lists")
     if not isinstance(limits, Mapping):
@@ -566,7 +601,9 @@ def validate_patch(
         _normalize_pattern(extension, "editable_extensions").casefold()
         for extension in editable_extensions
     ]
-    editable_paths = [_normalize_pattern(pattern, "editable_paths") for pattern in editable_paths]
+    editable_paths = [
+        _normalize_pattern(pattern, "editable_paths") for pattern in editable_paths
+    ]
     sensitive_paths = [
         _normalize_pattern(pattern, "sensitive_paths") for pattern in sensitive_paths
     ]
@@ -606,7 +643,9 @@ def validate_patch(
             path = f["path"]
             if not _matches_any(f["policy_path"], editable_paths):
                 requires_human_review = True
-                violations.append(f"file '{path}' does not match any pattern in editable_paths")
+                violations.append(
+                    f"file '{path}' does not match any pattern in editable_paths"
+                )
 
     # Control 3 — sensitive paths (always blocks, never skipped)
     for f in metadata_patch_files:
@@ -625,7 +664,9 @@ def validate_patch(
     if not isinstance(blocked_patterns, list) or any(
         not isinstance(pattern, str) for pattern in blocked_patterns
     ):
-        raise PatchValidationError("safety.limits.blocked_patterns must be a list of strings")
+        raise PatchValidationError(
+            "safety.limits.blocked_patterns must be a list of strings"
+        )
     for name, limit in (
         ("max_files", max_files),
         ("max_lines_per_file", max_lines_per_file),
@@ -641,7 +682,9 @@ def validate_patch(
             compiled_patterns.append((pattern, re.compile(pattern)))
         except re.error as error:
             requires_human_review = True
-            violations.append(f"blocked_patterns entry '{pattern}' is not a valid regex ({error})")
+            violations.append(
+                f"blocked_patterns entry '{pattern}' is not a valid regex ({error})"
+            )
     for file_data in applied_patch_files:
         path = file_data["path"]
         content = file_data["changed_content"]

@@ -99,9 +99,13 @@ def _test_result(
 ) -> TestExecutorResult:
     if results is None:
         results = [
-            CommandResult(name="dbt-test", status="PASSED", duration_seconds=1.5, log_ref=None)
+            CommandResult(
+                name="dbt-test", status="PASSED", duration_seconds=1.5, log_ref=None
+            )
         ]
-    return TestExecutorResult(run_id=run_id, results=results, validation_status=validation_status)
+    return TestExecutorResult(
+        run_id=run_id, results=results, validation_status=validation_status
+    )
 
 
 def _call(**overrides: Any) -> PRRequest:
@@ -111,7 +115,9 @@ def _call(**overrides: Any) -> PRRequest:
         "branch": "fix/pipeline-etl-incident-pr-001",
         "base": "main",
         "commit": "abc1234",
-        "files_changed": [{"path": "dbt/models/foo.sql", "lines_added": 5, "lines_removed": 2}],
+        "files_changed": [
+            {"path": "dbt/models/foo.sql", "lines_added": 5, "lines_removed": 2}
+        ],
         "test_result": _test_result(),
     }
     defaults.update(overrides)
@@ -125,7 +131,9 @@ def test_build_pr_request_returns_pr_request_with_draft_true() -> None:
 
 
 def test_title_with_pipeline_id_and_failed_step() -> None:
-    result = _call(incident=_incident(pipeline_id="pipeline-etl", failed_step="load-step"))
+    result = _call(
+        incident=_incident(pipeline_id="pipeline-etl", failed_step="load-step")
+    )
     assert result.title == "fix(pipeline-etl): remediate CODE failure in load-step"
 
 
@@ -168,7 +176,11 @@ def test_body_with_empty_files_changed_shows_placeholder() -> None:
 
 def test_body_with_tests_shows_table() -> None:
     tr = _test_result(
-        results=[CommandResult(name="dbt-run", status="PASSED", duration_seconds=2.1, log_ref=None)]
+        results=[
+            CommandResult(
+                name="dbt-run", status="PASSED", duration_seconds=2.1, log_ref=None
+            )
+        ]
     )
     result = _call(test_result=tr)
     assert "| Command | Status | Duration (s) |" in result.body

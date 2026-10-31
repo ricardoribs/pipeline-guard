@@ -120,7 +120,9 @@ class InMemoryRepairPRClient:
     def owner(self) -> str | None:
         return "example-org" if self.provider == "github" else None
 
-    def list_pull_requests(self, repository: str, state: str) -> list[dict[str, object]]:
+    def list_pull_requests(
+        self, repository: str, state: str
+    ) -> list[dict[str, object]]:
         assert repository == "delivery-dashboard"
         assert state == ("OPEN" if self.provider == "bitbucket" else "open")
         self.list_calls += 1
@@ -246,7 +248,9 @@ def test_provider_created_non_draft_is_closed(provider: str) -> None:
 
 @pytest.mark.parametrize("provider", ["gitlab", "azure-devops"])
 def test_unsupported_provider_is_rejected_before_credentials(provider: str) -> None:
-    with pytest.raises(RepairPRPublicationError, match="unsupported repair PR provider"):
+    with pytest.raises(
+        RepairPRPublicationError, match="unsupported repair PR provider"
+    ):
         publish_request(_payload(provider))
 
 
@@ -380,8 +384,8 @@ def test_real_provider_clients_cover_list_create_and_close(
         monkeypatch.setenv("BITBUCKET_API_TOKEN", "test-token")
         monkeypatch.setenv("BITBUCKET_URL", "https://bitbucket.org/example-org")
         monkeypatch.delenv("BITBUCKET_EMAIL", raising=False)
-        client: BitbucketRepairPRClient | GitHubRepairPRClient = BitbucketRepairPRClient(
-            workspace="example-org"
+        client: BitbucketRepairPRClient | GitHubRepairPRClient = (
+            BitbucketRepairPRClient(workspace="example-org")
         )
         state = "OPEN"
     else:
@@ -438,8 +442,8 @@ def test_real_provider_clients_reconcile_create_conflict(
         monkeypatch.setenv("BITBUCKET_API_TOKEN", "test-token")
         monkeypatch.setenv("BITBUCKET_URL", "https://bitbucket.org/example-org")
         monkeypatch.delenv("BITBUCKET_EMAIL", raising=False)
-        client: BitbucketRepairPRClient | GitHubRepairPRClient = BitbucketRepairPRClient(
-            workspace="example-org"
+        client: BitbucketRepairPRClient | GitHubRepairPRClient = (
+            BitbucketRepairPRClient(workspace="example-org")
         )
     else:
         monkeypatch.setenv("GITHUB_API_TOKEN", "test-token")

@@ -67,7 +67,9 @@ class LargeLogPolicy:
             or self.overlap_lines < 0
             or self.overlap_lines >= self.chunk_lines
         ):
-            raise ValueError("overlap_lines must be an integer from zero to chunk_lines - 1")
+            raise ValueError(
+                "overlap_lines must be an integer from zero to chunk_lines - 1"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,7 +215,9 @@ def _content_as_bytes(
         try:
             raw_content = _canonical_json(content).encode("utf-8")
         except (TypeError, ValueError) as error:
-            raise LargeLogProcessingError("large log mappings must be JSON serializable") from error
+            raise LargeLogProcessingError(
+                "large log mappings must be JSON serializable"
+            ) from error
 
     if len(raw_content) > max_input_bytes:
         raise _oversized_log_error(len(raw_content), max_input_bytes)
@@ -234,7 +238,9 @@ def _oversized_log_error(
     )
 
 
-def _build_chunk_index(lines: list[str], policy: LargeLogPolicy) -> list[dict[str, object]]:
+def _build_chunk_index(
+    lines: list[str], policy: LargeLogPolicy
+) -> list[dict[str, object]]:
     chunks: list[dict[str, object]] = []
     step = policy.chunk_lines - policy.overlap_lines
     for start in range(0, len(lines), step):

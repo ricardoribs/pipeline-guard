@@ -31,7 +31,10 @@ AWS_SECRET_ACCESS_KEY = "Ab3/" * 10
 @pytest.mark.parametrize(
     ("source", "secret"),
     [
-        ("Authorization: Bearer bearer-token-value-123456", "bearer-token-value-123456"),
+        (
+            "Authorization: Bearer bearer-token-value-123456",
+            "bearer-token-value-123456",
+        ),
         ("Authorization: Token token-value-1234567890", "token-value-1234567890"),
         ("AccountKey=YWJjZGVmZ2hpamtsbW5vcA==", "YWJjZGVmZ2hpamtsbW5vcA=="),
         ("api_key='stripe-test-placeholder'", "stripe-test-placeholder"),
@@ -46,12 +49,18 @@ AWS_SECRET_ACCESS_KEY = "Ab3/" * 10
         (f"Atlassian API token: {ATLASSIAN_API_TOKEN}", ATLASSIAN_API_TOKEN),
         (f"DigitalOcean PAT: {DIGITALOCEAN_PAT}", DIGITALOCEAN_PAT),
         (f"AWS credential: {AWS_SECRET_ACCESS_KEY}", AWS_SECRET_ACCESS_KEY),
-        ('"clientSecret": "literal-client-secret-123456"', "literal-client-secret-123456"),
+        (
+            '"clientSecret": "literal-client-secret-123456"',
+            "literal-client-secret-123456",
+        ),
         ("password=literal-password", "literal-password"),
         ("token: literal-token-value", "literal-token-value"),
         ("DATABRICKS_TOKEN=literal-databricks-token", "literal-databricks-token"),
         ("AWS_SECRET_ACCESS_KEY=literal-aws-secret-key", "literal-aws-secret-key"),
-        ("Cookie: sessionid=literal-session-cookie; theme=dark", "literal-session-cookie"),
+        (
+            "Cookie: sessionid=literal-session-cookie; theme=dark",
+            "literal-session-cookie",
+        ),
         ("Set-Cookie: auth=literal-auth-cookie; HttpOnly", "literal-auth-cookie"),
         ("senha=literal-senha", "literal-senha"),
         ("segredo: literal-segredo", "literal-segredo"),
@@ -63,7 +72,10 @@ AWS_SECRET_ACCESS_KEY = "Ab3/" * 10
             "SharedAccessSignature=sv=2024-01-01&sig=literal-sas-signature&se=2099-01-01",
             "literal-sas-signature",
         ),
-        ("token=ghp_abcdefghijklmnopqrstuvwxyz123456", "ghp_abcdefghijklmnopqrstuvwxyz123456"),
+        (
+            "token=ghp_abcdefghijklmnopqrstuvwxyz123456",
+            "ghp_abcdefghijklmnopqrstuvwxyz123456",
+        ),
         (
             "jwt=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.signature123456",
             "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.signature123456",

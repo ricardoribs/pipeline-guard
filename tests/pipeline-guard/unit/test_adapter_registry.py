@@ -65,7 +65,9 @@ def test_rejects_registered_adapter_outside_allowlist():
 def test_rejects_allowlisted_but_unregistered_adapter():
     registry = AdapterRegistry({"mock": MockAdapter})
 
-    with pytest.raises(AdapterRegistryError, match="not installed or registered") as error:
+    with pytest.raises(
+        AdapterRegistryError, match="not installed or registered"
+    ) as error:
         registry.resolve("ghost", allowed_names={"ghost"})
 
     assert error.value.code == "ADAPTER_NOT_REGISTERED"

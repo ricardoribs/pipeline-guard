@@ -125,7 +125,13 @@ def test_external_reference_is_required(external_reference: str | None) -> None:
         (_approval(decided_at="not-a-date"), "date-time"),
         (_approval(base_commit=None), "not of type 'string'"),
     ],
-    ids=["not-object", "missing-fields", "unknown-field", "bad-date", "bad-base-commit"],
+    ids=[
+        "not-object",
+        "missing-fields",
+        "unknown-field",
+        "bad-date",
+        "bad-base-commit",
+    ],
 )
 def test_invalid_approval_contract_is_rejected(
     approval: object,

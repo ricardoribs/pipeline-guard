@@ -155,7 +155,10 @@ def test_project_without_config_is_rejected(
     assert error.code == "CONFIG_NOT_FOUND"
     assert error.file_path == config_path
     assert error.field == "$"
-    assert error.correction == "materialize a pipeline-guard preset and provide its file path"
+    assert (
+        error.correction
+        == "materialize a pipeline-guard preset and provide its file path"
+    )
     assert not config_path.exists()
 
 
@@ -337,7 +340,10 @@ runtime:
     )
 
     assert config["repository"]["url"] == "https://example.com/repository.git"
-    assert config["evidence_providers"][0]["config"]["connectionString"] == "env:DATABASE_URL"
+    assert (
+        config["evidence_providers"][0]["config"]["connectionString"]
+        == "env:DATABASE_URL"
+    )
     assert config_path.read_text(encoding="utf-8") == config_text
 
 
@@ -417,9 +423,7 @@ class _FixtureProvider:
         return ()
 
 
-_CREDENTIAL_REFERENCE_SCHEMA_ID = (
-    "urn:pipeline-guard:credential-reference.schema.json"
-)
+_CREDENTIAL_REFERENCE_SCHEMA_ID = "urn:pipeline-guard:credential-reference.schema.json"
 
 
 def _evidence_registry(
@@ -498,12 +502,16 @@ def _provider_config(
 
 
 def test_provider_credential_rejects_literal_value(tmp_path: Path) -> None:
-    config_path = _provider_config(tmp_path, provider_config={"token": "literal-secret-value"})
+    config_path = _provider_config(
+        tmp_path, provider_config={"token": "literal-secret-value"}
+    )
 
     with pytest.raises(ConfigValidationError) as captured:
         validate_config(
             config_path,
-            evidence_provider_registry=_evidence_registry(config_schema=_fixture_provider_schema()),
+            evidence_provider_registry=_evidence_registry(
+                config_schema=_fixture_provider_schema()
+            ),
         )
 
     assert captured.value.code == "CONFIG_LITERAL_CREDENTIAL"
@@ -515,25 +523,33 @@ def test_provider_credential_rejects_literal_value(tmp_path: Path) -> None:
     "reference",
     ["MY_TOKEN", "env:MY_TOKEN", "${MY_TOKEN}", "secret:team/provider-token"],
 )
-def test_provider_credential_accepts_reference_forms(tmp_path: Path, reference: str) -> None:
+def test_provider_credential_accepts_reference_forms(
+    tmp_path: Path, reference: str
+) -> None:
     config_path = _provider_config(tmp_path, provider_config={"token": reference})
 
     config = validate_config(
         config_path,
-        evidence_provider_registry=_evidence_registry(config_schema=_fixture_provider_schema()),
+        evidence_provider_registry=_evidence_registry(
+            config_schema=_fixture_provider_schema()
+        ),
     )
 
     assert config["evidence_providers"][0]["config"]["token"] == reference
 
 
 @pytest.mark.parametrize("literal", ["hunter2", "literalSecret"])
-def test_annotated_provider_credential_rejects_literal_values(tmp_path: Path, literal: str) -> None:
+def test_annotated_provider_credential_rejects_literal_values(
+    tmp_path: Path, literal: str
+) -> None:
     config_path = _provider_config(tmp_path, provider_config={"auth": literal})
 
     with pytest.raises(ConfigValidationError):
         validate_config(
             config_path,
-            evidence_provider_registry=_evidence_registry(config_schema=_fixture_provider_schema()),
+            evidence_provider_registry=_evidence_registry(
+                config_schema=_fixture_provider_schema()
+            ),
         )
 
 
@@ -541,7 +557,9 @@ def test_unknown_provider_is_rejected_without_fallback(tmp_path: Path) -> None:
     config_path = _provider_config(tmp_path, provider_type="unknown")
 
     with pytest.raises(ConfigValidationError) as captured:
-        validate_config(config_path, evidence_provider_registry=EvidenceProviderRegistry({}))
+        validate_config(
+            config_path, evidence_provider_registry=EvidenceProviderRegistry({})
+        )
 
     assert captured.value.code == "CONFIG_EVIDENCE_PROVIDER_REJECTED"
     assert captured.value.field == "$.evidence_providers[0].type"
@@ -561,7 +579,9 @@ def test_registry_rejects_provider_schema_with_open_nested_object() -> None:
         },
     }
 
-    with pytest.raises(EvidenceProviderRegistryError, match="additionalProperties: false"):
+    with pytest.raises(
+        EvidenceProviderRegistryError, match="additionalProperties: false"
+    ):
         _evidence_registry(config_schema=schema)
 
 
@@ -572,24 +592,32 @@ def test_registry_requires_credential_fields_to_reference_shared_schema() -> Non
         "properties": {"token": {"type": "string"}},
     }
 
-    with pytest.raises(EvidenceProviderRegistryError, match="must reference the shared"):
+    with pytest.raises(
+        EvidenceProviderRegistryError, match="must reference the shared"
+    ):
         _evidence_registry(config_schema=schema)
 
 
-def test_main_schema_is_validated_before_provider_registry_lookup(tmp_path: Path) -> None:
+def test_main_schema_is_validated_before_provider_registry_lookup(
+    tmp_path: Path,
+) -> None:
     config_path = _provider_config(tmp_path, provider_type="unknown")
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     del config["pipeline"]["adapter"]
     config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
 
     with pytest.raises(ConfigValidationError) as captured:
-        validate_config(config_path, evidence_provider_registry=EvidenceProviderRegistry({}))
+        validate_config(
+            config_path, evidence_provider_registry=EvidenceProviderRegistry({})
+        )
 
     assert captured.value.code == "CONFIG_REQUIRED_FIELD"
     assert captured.value.field == "$.pipeline.adapter"
 
 
-def test_provider_schema_rejects_unknown_nested_configuration_keys(tmp_path: Path) -> None:
+def test_provider_schema_rejects_unknown_nested_configuration_keys(
+    tmp_path: Path,
+) -> None:
     config_path = _provider_config(
         tmp_path,
         provider_config={"options": {"region": "us-east-1", "extra": "value"}},
@@ -598,7 +626,9 @@ def test_provider_schema_rejects_unknown_nested_configuration_keys(tmp_path: Pat
     with pytest.raises(ConfigValidationError) as captured:
         validate_config(
             config_path,
-            evidence_provider_registry=_evidence_registry(config_schema=_fixture_provider_schema()),
+            evidence_provider_registry=_evidence_registry(
+                config_schema=_fixture_provider_schema()
+            ),
         )
 
     assert captured.value.code == "CONFIG_UNKNOWN_FIELD"
@@ -608,7 +638,9 @@ def test_provider_schema_rejects_unknown_nested_configuration_keys(tmp_path: Pat
 def test_empty_evidence_provider_list_is_valid(tmp_path: Path) -> None:
     config_path = _provider_config(tmp_path, providers=[])
 
-    config = validate_config(config_path, evidence_provider_registry=EVIDENCE_PROVIDER_REGISTRY)
+    config = validate_config(
+        config_path, evidence_provider_registry=EVIDENCE_PROVIDER_REGISTRY
+    )
 
     assert config["evidence_providers"] == []
 
@@ -628,7 +660,10 @@ def test_connection_string_accepts_a_credential_reference(tmp_path: Path) -> Non
         ),
     )
 
-    assert config["evidence_providers"][0]["config"]["connectionString"] == "env:DATABASE_URL"
+    assert (
+        config["evidence_providers"][0]["config"]["connectionString"]
+        == "env:DATABASE_URL"
+    )
 
 
 @pytest.mark.parametrize(
@@ -672,7 +707,9 @@ runtime:
         "PIPELINE_GUARD_GIT_PUSH_TOKEN",
     ],
 )
-def test_push_credential_ref_rejects_literal_or_bare_name(tmp_path: Path, invalid_ref: str) -> None:
+def test_push_credential_ref_rejects_literal_or_bare_name(
+    tmp_path: Path, invalid_ref: str
+) -> None:
     config_path = tmp_path / "push-cred-invalid.yaml"
     config_path.write_text(
         f"""schema_version: "1.0"
@@ -766,11 +803,16 @@ def test_unattended_service_identity_requires_service_namespace(
     assert error.code == "CONFIG_INVALID_SERVICE_IDENTITY"
     assert error.file_path == config_path
     assert error.field == "$.unattended.service_identity"
-    assert error.correction == 'use a lowercase service identity such as "sp:pipeline-guard"'
+    assert (
+        error.correction
+        == 'use a lowercase service identity such as "sp:pipeline-guard"'
+    )
     assert invalid_identity not in str(error)
 
 
-def test_enabled_unattended_configuration_requires_secret_and_model_limit(tmp_path: Path) -> None:
+def test_enabled_unattended_configuration_requires_secret_and_model_limit(
+    tmp_path: Path,
+) -> None:
     config_path = tmp_path / "unattended-enabled.yaml"
     config_path.write_text(
         _unattended_config(
@@ -792,7 +834,9 @@ def test_enabled_unattended_configuration_requires_secret_and_model_limit(tmp_pa
     assert config["unattended"]["max_model_tokens"] == 200000
 
 
-@pytest.mark.parametrize("missing_field", ["authorization_secret_ref", "max_model_tokens"])
+@pytest.mark.parametrize(
+    "missing_field", ["authorization_secret_ref", "max_model_tokens"]
+)
 def test_enabled_unattended_configuration_reports_missing_required_field(
     tmp_path: Path,
     missing_field: str,
@@ -809,7 +853,8 @@ def test_enabled_unattended_configuration_reports_missing_required_field(
         _unattended_config(
             "unattended:\n"
             "  remediation_enabled: true\n"
-            '  service_identity: "sp:pipeline-guard"\n' + "".join(unattended_fields.values())
+            '  service_identity: "sp:pipeline-guard"\n'
+            + "".join(unattended_fields.values())
         ),
         encoding="utf-8",
     )
@@ -824,7 +869,9 @@ def test_enabled_unattended_configuration_reports_missing_required_field(
     assert error.correction == f"add the required field '{missing_field}'"
 
 
-def test_unattended_secret_literal_is_rejected_without_leaking_value(tmp_path: Path) -> None:
+def test_unattended_secret_literal_is_rejected_without_leaking_value(
+    tmp_path: Path,
+) -> None:
     literal_secret = "literal-policy-secret-value"
     config_path = tmp_path / "unattended-literal-secret.yaml"
     config_path.write_text(

@@ -177,7 +177,9 @@ def _redact_authorization(match: re.Match[str]) -> str:
     value = value.strip()
     scheme = re.match(r"(?P<scheme>[A-Za-z][A-Za-z0-9_-]*)[\t ]+.+", value)
     replacement = (
-        f"{scheme.group('scheme')} {REDACTED_SECRET}" if scheme is not None else REDACTED_SECRET
+        f"{scheme.group('scheme')} {REDACTED_SECRET}"
+        if scheme is not None
+        else REDACTED_SECRET
     )
     return f"{match.group('prefix')}{quote}{replacement}{quote}"
 

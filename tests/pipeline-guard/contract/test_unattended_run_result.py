@@ -10,7 +10,9 @@ from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 REPO_ROOT = PLUGIN_ROOT
-SCHEMA_PATH = PLUGIN_ROOT / "contracts" / "schema" / "unattended_run_result_v1.schema.json"
+SCHEMA_PATH = (
+    PLUGIN_ROOT / "contracts" / "schema" / "unattended_run_result_v1.schema.json"
+)
 SPEC_SCHEMA_PATH = (
     REPO_ROOT
     / "docs"
@@ -37,7 +39,9 @@ def _validator() -> Draft202012Validator:
     return Draft202012Validator(_load_schema(), format_checker=FormatChecker())
 
 
-def _base_result(outcome: str, exit_code: int, reason_code: str | None = None) -> dict[str, Any]:
+def _base_result(
+    outcome: str, exit_code: int, reason_code: str | None = None
+) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema_version": "1.0",
         "mode": "unattended",
@@ -127,7 +131,9 @@ def test_accepts_each_terminal_outcome(result: dict[str, Any]) -> None:
     [(0, 1), (1, 4), (2, 5), (3, 4), (4, 2)],
     ids=["draft-published", "report-only", "blocked", "limit-reached", "error"],
 )
-def test_rejects_an_exit_code_from_another_outcome(index: int, wrong_exit_code: int) -> None:
+def test_rejects_an_exit_code_from_another_outcome(
+    index: int, wrong_exit_code: int
+) -> None:
     result = copy.deepcopy(_valid_results()[index])
     result["exit_code"] = wrong_exit_code
 
@@ -145,7 +151,9 @@ def test_rejects_an_exit_code_from_another_outcome(index: int, wrong_exit_code: 
     ],
     ids=["report-only", "blocked", "limit-reached", "error"],
 )
-def test_rejects_a_reason_code_from_another_outcome(index: int, wrong_reason_code: str) -> None:
+def test_rejects_a_reason_code_from_another_outcome(
+    index: int, wrong_reason_code: str
+) -> None:
     result = copy.deepcopy(_valid_results()[index])
     result["reason_code"] = wrong_reason_code
 

@@ -34,7 +34,10 @@ _CONTRACT_SCHEMA_PATHS = {
     / "contracts"
     / "schema"
     / "eligibility_decision_v1.schema.json",
-    "incident_input_v1": _PLUGIN_ROOT / "contracts" / "schema" / "incident_input_v1.schema.json",
+    "incident_input_v1": _PLUGIN_ROOT
+    / "contracts"
+    / "schema"
+    / "incident_input_v1.schema.json",
     "pipeline_adapter_interface": _PLUGIN_ROOT
     / "contracts"
     / "schema"
@@ -49,7 +52,9 @@ _SCHEMA_VERSION = "1.0"
 _TERMINAL_STATUSES = frozenset({"COMPLETED", "FAILED", "STOPPED_UNKNOWN"})
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-_TIMING_FIELDS = frozenset({"created_at", "started_at", "finished_at", "duration_seconds"})
+_TIMING_FIELDS = frozenset(
+    {"created_at", "started_at", "finished_at", "duration_seconds"}
+)
 _RUN_ID_KEY_FILENAME = ".run-id-hmac.key"
 _RUN_ID_KEY_BYTES = 32
 
@@ -92,7 +97,9 @@ def derive_manifest_run_id(
         raise RunManifestError("attempt_payload must be JSON serializable") from error
 
     attempt_fingerprint = (
-        hmac.new(_load_run_id_key(plugin_data_dir), serialized_attempt, hashlib.sha256).hexdigest()
+        hmac.new(
+            _load_run_id_key(plugin_data_dir), serialized_attempt, hashlib.sha256
+        ).hexdigest()
         if serialized_attempt is not None
         else None
     )
@@ -112,7 +119,9 @@ def _load_run_id_key(plugin_data_dir: Path | str | None) -> bytes:
     if plugin_data_dir is None:
         plugin_data_dir = os.environ.get("CLAUDE_PLUGIN_DATA")
     if plugin_data_dir is None or not str(plugin_data_dir).strip():
-        raise RunManifestError("CLAUDE_PLUGIN_DATA is required for keyed attempt identifiers")
+        raise RunManifestError(
+            "CLAUDE_PLUGIN_DATA is required for keyed attempt identifiers"
+        )
 
     data_dir = Path(plugin_data_dir).expanduser()
     key_path = data_dir / _RUN_ID_KEY_FILENAME
@@ -136,7 +145,9 @@ def _load_run_id_key(plugin_data_dir: Path | str | None) -> bytes:
                 os.link(temporary_path, key_path)
             except FileExistsError:
                 if key_path.is_symlink():
-                    raise RunManifestError("run ID key must not be a symbolic link") from None
+                    raise RunManifestError(
+                        "run ID key must not be a symbolic link"
+                    ) from None
         key = key_path.read_bytes()
         if len(key) != _RUN_ID_KEY_BYTES:
             raise RunManifestError("run ID key must contain exactly 32 bytes")
@@ -174,9 +185,13 @@ def current_contract_versions() -> dict[str, str]:
                     raise TypeError("schema_version.enum must be a non-empty list")
                 version = supported_versions[-1]
         except (OSError, json.JSONDecodeError, KeyError, TypeError) as error:
-            raise RunManifestError(f"could not resolve version for contract {name!r}") from error
+            raise RunManifestError(
+                f"could not resolve version for contract {name!r}"
+            ) from error
         if not isinstance(version, str) or not version:
-            raise RunManifestError(f"contract {name!r} declares an invalid schema version")
+            raise RunManifestError(
+                f"contract {name!r} declares an invalid schema version"
+            )
         versions[name] = version
     return versions
 
@@ -225,7 +240,9 @@ def build_run_manifest(
         "limitations": _normalize_limitations(limitations),
     }
     sanitized = redact_payload(manifest)
-    if not isinstance(sanitized, dict):  # Defensive: the redactor preserves JSON containers.
+    if not isinstance(
+        sanitized, dict
+    ):  # Defensive: the redactor preserves JSON containers.
         raise RunManifestError("sanitization produced an invalid manifest")
     return validate_run_manifest(sanitized)
 
@@ -237,7 +254,9 @@ def validate_run_manifest(manifest: object) -> dict[str, Any]:
 
     schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
     errors = sorted(
-        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(manifest),
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(
+            manifest
+        ),
         key=lambda error: tuple(str(part) for part in error.absolute_path),
     )
     if errors:
@@ -273,7 +292,9 @@ def persist_run_manifest(manifest: object, *, artifact_store: ArtifactStore) -> 
             f"run {run_id!r} already has an invalid immutable manifest"
         ) from error
     if _without_timing(existing_document) != _without_timing(document):
-        raise RunManifestConflictError(f"run {run_id!r} already has a different immutable manifest")
+        raise RunManifestConflictError(
+            f"run {run_id!r} already has a different immutable manifest"
+        )
     return False
 
 
@@ -287,7 +308,11 @@ def load_run_manifest(*, run_id: str, artifact_store: ArtifactStore) -> dict[str
 
 
 def _require_aware_datetime(value: datetime, field_name: str) -> datetime:
-    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+    if (
+        not isinstance(value, datetime)
+        or value.tzinfo is None
+        or value.utcoffset() is None
+    ):
         raise RunManifestError(f"{field_name} must be a timezone-aware datetime")
     return value.astimezone(UTC)
 
@@ -302,7 +327,9 @@ def _normalize_contract_versions(versions: Mapping[str, str]) -> dict[str, str]:
     normalized: dict[str, str] = {}
     for name, version in sorted(versions.items()):
         if not isinstance(name, str) or re.fullmatch(r"[a-z][a-z0-9_]*", name) is None:
-            raise RunManifestError("contract version names must use lowercase snake_case")
+            raise RunManifestError(
+                "contract version names must use lowercase snake_case"
+            )
         if not isinstance(version, str) or not version.strip():
             raise RunManifestError(f"contract {name!r} must have a non-empty version")
         normalized[name] = version.strip()
@@ -325,7 +352,10 @@ def _normalize_evidence_hashes(
             raise RunManifestError("every evidence must have a non-empty evidence_id")
         if evidence_id in seen_ids:
             raise RunManifestError(f"duplicate evidence_id {evidence_id!r}")
-        if not isinstance(content_hash, str) or _SHA256_RE.fullmatch(content_hash) is None:
+        if (
+            not isinstance(content_hash, str)
+            or _SHA256_RE.fullmatch(content_hash) is None
+        ):
             raise RunManifestError(
                 f"evidence {evidence_id!r} hash must use sha256:<64 lowercase hex>"
             )

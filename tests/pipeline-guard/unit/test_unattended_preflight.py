@@ -94,9 +94,9 @@ def _environment(
         "PUSH_TOKEN": "push-secret-value",
         "POLICY_SECRET": "policy-secret-value",
     }
-    environment["BITBUCKET_API_TOKEN" if provider == "bitbucket" else "GITHUB_API_TOKEN"] = (
-        "pr-secret-value"
-    )
+    environment[
+        "BITBUCKET_API_TOKEN" if provider == "bitbucket" else "GITHUB_API_TOKEN"
+    ] = "pr-secret-value"
     return environment
 
 
@@ -327,7 +327,9 @@ def test_missing_environment_prerequisite_never_leaks_values(
     assert all(secret not in error_text for secret in secret_values)
 
 
-def test_explicit_model_replaces_missing_model_environment_variable(tmp_path: Path) -> None:
+def test_explicit_model_replaces_missing_model_environment_variable(
+    tmp_path: Path,
+) -> None:
     directories = _directories(tmp_path)
     config_path = _write_config(tmp_path)
     environment = _environment(directories)
@@ -338,7 +340,9 @@ def test_explicit_model_replaces_missing_model_environment_variable(tmp_path: Pa
     assert result.model == "cli-model"
 
 
-def test_github_credentials_are_selected_from_repository_provider(tmp_path: Path) -> None:
+def test_github_credentials_are_selected_from_repository_provider(
+    tmp_path: Path,
+) -> None:
     directories = _directories(tmp_path)
     config_path = _write_config(tmp_path, provider="github")
 
@@ -414,7 +418,9 @@ def test_create_once_failure_is_rejected_without_creating_workspace(
     directories = _directories(tmp_path)
     config_path = _write_config(tmp_path)
 
-    def unsupported_put(_store: object, _run_id: str, _reference: str, _data: bytes) -> bool:
+    def unsupported_put(
+        _store: object, _run_id: str, _reference: str, _data: bytes
+    ) -> bool:
         raise OSError("filesystem-link-secret-detail")
 
     monkeypatch.setattr(unattended_preflight.LocalArtifactStore, "put", unsupported_put)
@@ -440,7 +446,9 @@ def test_non_writable_output_directory_is_rejected(
             raise OSError("write-secret-detail")
         return original_named_temporary_file(*args, **kwargs)
 
-    monkeypatch.setattr(unattended_preflight.tempfile, "NamedTemporaryFile", fail_for_output)
+    monkeypatch.setattr(
+        unattended_preflight.tempfile, "NamedTemporaryFile", fail_for_output
+    )
 
     with pytest.raises(UnattendedPreflightError) as captured:
         _run(config_path, directories, _environment(directories))
@@ -449,7 +457,9 @@ def test_non_writable_output_directory_is_rejected(
     assert "write-secret-detail" not in str(captured.value)
 
 
-def test_invalid_config_is_reported_as_structured_prerequisite_error(tmp_path: Path) -> None:
+def test_invalid_config_is_reported_as_structured_prerequisite_error(
+    tmp_path: Path,
+) -> None:
     directories = _directories(tmp_path)
     config_path = _write_config(tmp_path)
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))

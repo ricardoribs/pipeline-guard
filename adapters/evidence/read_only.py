@@ -81,7 +81,10 @@ class ReadOnlyQueryWrapper:
         allowed_queries: Mapping[str, ReadOnlyQuerySpec],
     ) -> None:
         guarantees = getattr(executor, "guarantees", None)
-        if not isinstance(guarantees, QueryExecutionGuarantees) or not guarantees.complete:
+        if (
+            not isinstance(guarantees, QueryExecutionGuarantees)
+            or not guarantees.complete
+        ):
             raise ReadOnlyQueryConfigurationError(
                 "Query executor must guarantee read-only execution, bound parameters, "
                 "a source-enforced row limit, and a source-enforced timeout."
@@ -103,7 +106,9 @@ class ReadOnlyQueryWrapper:
         """Run a statement only when its ID and exact text match configuration."""
         spec = self._allowed_queries.get(query_id)
         if spec is None:
-            raise ReadOnlyQueryConfigurationError(f"Query {query_id!r} is not allowlisted.")
+            raise ReadOnlyQueryConfigurationError(
+                f"Query {query_id!r} is not allowlisted."
+            )
         self._validate_statement(query)
         if query != spec.query:
             raise ReadOnlyQueryConfigurationError(
@@ -132,16 +137,22 @@ class ReadOnlyQueryWrapper:
                 "Queries must be one configured statement without comments or separators."
             )
         if not _LEADING_READ.match(query) or _MUTATING_SQL.search(query):
-            raise ReadOnlyQueryConfigurationError("Only read-only SELECT queries are allowed.")
+            raise ReadOnlyQueryConfigurationError(
+                "Only read-only SELECT queries are allowed."
+            )
 
     @staticmethod
     def _validate_limits(max_rows: int, timeout_seconds: float) -> None:
         if not isinstance(max_rows, int) or isinstance(max_rows, bool) or max_rows <= 0:
-            raise ReadOnlyQueryConfigurationError("max_rows must be a positive integer.")
+            raise ReadOnlyQueryConfigurationError(
+                "max_rows must be a positive integer."
+            )
         if (
             not isinstance(timeout_seconds, int | float)
             or isinstance(timeout_seconds, bool)
             or not math.isfinite(timeout_seconds)
             or timeout_seconds <= 0
         ):
-            raise ReadOnlyQueryConfigurationError("timeout_seconds must be a positive number.")
+            raise ReadOnlyQueryConfigurationError(
+                "timeout_seconds must be a positive number."
+            )

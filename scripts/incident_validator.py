@@ -35,7 +35,9 @@ class IncidentValidationError(ValueError):
     """Raised when an incident does not satisfy the canonical input contract."""
 
 
-def validate_incident_input(payload: object, *, unattended: bool = False) -> dict[str, Any]:
+def validate_incident_input(
+    payload: object, *, unattended: bool = False
+) -> dict[str, Any]:
     """Validate and return an incident payload without assuming a specific host.
 
     When ``unattended`` is true, require the host trace. Missing code-version
@@ -48,11 +50,15 @@ def validate_incident_input(payload: object, *, unattended: bool = False) -> dic
     if unattended:
         host_run = payload.get("host_run")
         if not isinstance(host_run, dict):
-            raise IncidentValidationError("host_run: required for unattended remediation input")
+            raise IncidentValidationError(
+                "host_run: required for unattended remediation input"
+            )
 
     schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
     errors = sorted(
-        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(payload),
+        Draft202012Validator(schema, format_checker=FormatChecker()).iter_errors(
+            payload
+        ),
         key=lambda error: tuple(str(part) for part in error.absolute_path),
     )
     if errors:
@@ -107,7 +113,9 @@ def validate_or_reuse_incident(
     evidence = collect_evidence(incident)
     if attempt is not None:
         try:
-            serialized = json.dumps(evidence, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            serialized = json.dumps(
+                evidence, ensure_ascii=False, sort_keys=True
+            ).encode("utf-8")
         except (TypeError, ValueError) as error:
             raise ValueError(
                 "collected evidence must be JSON serializable for idempotency"

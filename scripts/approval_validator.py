@@ -16,7 +16,10 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 _SCHEMA_PATH = (
-    Path(__file__).resolve().parents[1] / "contracts" / "schema" / "approval_input_v1.schema.json"
+    Path(__file__).resolve().parents[1]
+    / "contracts"
+    / "schema"
+    / "approval_input_v1.schema.json"
 )
 
 
@@ -75,11 +78,17 @@ def validate_approval(
     if document["decision"] != "APPROVED":
         raise ApprovalValidationError("decision: remediation requires APPROVED")
     if document["incident_id"] != expected_incident_id:
-        raise ApprovalValidationError("incident_id: approval does not match the incident")
+        raise ApprovalValidationError(
+            "incident_id: approval does not match the incident"
+        )
     if document["diagnosis_hash"] != expected_diagnosis_hash:
-        raise ApprovalValidationError("diagnosis_hash: approval does not match the diagnosis")
+        raise ApprovalValidationError(
+            "diagnosis_hash: approval does not match the diagnosis"
+        )
     if document["base_commit"] != expected_base_commit:
-        raise ApprovalValidationError("base_commit: approval does not match the base commit")
+        raise ApprovalValidationError(
+            "base_commit: approval does not match the base commit"
+        )
 
     decided_at = _parse_datetime(document["decided_at"])
     if decided_at > now:
@@ -94,9 +103,15 @@ def _parse_datetime(value: str) -> datetime:
     normalized = f"{value[:-1]}+00:00" if value.endswith("Z") else value
     try:
         parsed = datetime.fromisoformat(normalized)
-    except ValueError as error:  # pragma: no cover - guarded by the schema format checker
-        raise ApprovalValidationError("decided_at: must be a valid date-time") from error
-    if parsed.utcoffset() is None:  # pragma: no cover - guarded by the schema format checker
+    except (
+        ValueError
+    ) as error:  # pragma: no cover - guarded by the schema format checker
+        raise ApprovalValidationError(
+            "decided_at: must be a valid date-time"
+        ) from error
+    if (
+        parsed.utcoffset() is None
+    ):  # pragma: no cover - guarded by the schema format checker
         raise ApprovalValidationError("decided_at: must include a timezone")
     return parsed
 

@@ -33,10 +33,14 @@ class AdapterRegistry:
 
         for name, factory in adapters.items():
             if _ADAPTER_NAME_PATTERN.fullmatch(name) is None:
-                raise ValueError(f"registered adapter name {name!r} must use lowercase kebab-case")
+                raise ValueError(
+                    f"registered adapter name {name!r} must use lowercase kebab-case"
+                )
 
             if not callable(factory):
-                raise TypeError(f"factory registered for adapter {name!r} must be callable")
+                raise TypeError(
+                    f"factory registered for adapter {name!r} must be callable"
+                )
 
             registered[name] = factory
 

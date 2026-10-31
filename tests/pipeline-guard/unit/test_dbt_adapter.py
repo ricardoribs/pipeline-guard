@@ -127,7 +127,8 @@ def test_failed_test_references_related_model_from_lineage() -> None:
     test_payload = next(
         payload
         for payload in _evidence_payloads(output)
-        if payload["unique_id"] == "test.pipeline_guard.not_null_fct_orders_customer_id.4f3a2b1c"
+        if payload["unique_id"]
+        == "test.pipeline_guard.not_null_fct_orders_customer_id.4f3a2b1c"
     )
 
     assert test_payload["lineage"] == {
@@ -169,7 +170,10 @@ def test_successful_nodes_do_not_generate_failure_evidence() -> None:
     output = _run_adapter()
     payloads = _evidence_payloads(output)
 
-    assert all(payload["unique_id"] != "model.pipeline_guard.stg_orders" for payload in payloads)
+    assert all(
+        payload["unique_id"] != "model.pipeline_guard.stg_orders"
+        for payload in payloads
+    )
 
 
 def test_evidence_hash_matches_its_content() -> None:
@@ -205,7 +209,9 @@ def test_rejects_declared_artifact_when_hash_does_not_match() -> None:
     incident = _sample_incident()
     incident["artifacts"][0]["hash"] = f"sha256:{'0' * 64}"
 
-    with pytest.raises(adapter_module.DbtArtifactError, match="does not match its incident hash"):
+    with pytest.raises(
+        adapter_module.DbtArtifactError, match="does not match its incident hash"
+    ):
         _run_adapter(incident=incident)
 
 
@@ -233,7 +239,9 @@ def test_node_without_depends_on_has_empty_lineage(tmp_path: Path) -> None:
     output = _run_adapter(tmp_path)
 
     test_payload = next(
-        payload for payload in _evidence_payloads(output) if payload["unique_id"] == test_id
+        payload
+        for payload in _evidence_payloads(output)
+        if payload["unique_id"] == test_id
     )
 
     assert test_payload["lineage"] == {"depends_on": []}

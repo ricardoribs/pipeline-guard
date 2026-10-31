@@ -58,7 +58,9 @@ def _is_diagnosis_agent_call(tool_name: object, tool_input: Mapping[str, Any]) -
     return agent_name.rsplit(":", maxsplit=1)[-1] == _DIAGNOSIS_AGENT
 
 
-def _is_headless_diagnosis_call(tool_name: object, tool_input: Mapping[str, Any]) -> bool:
+def _is_headless_diagnosis_call(
+    tool_name: object, tool_input: Mapping[str, Any]
+) -> bool:
     command = tool_input.get("command")
     return (
         tool_name in {"Bash", "PowerShell"}
@@ -159,7 +161,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             result = redact_hook_event(payload)
         except (TypeError, ValueError):
-            print("redaction hook input must be a valid supported hook event", file=sys.stderr)
+            print(
+                "redaction hook input must be a valid supported hook event",
+                file=sys.stderr,
+            )
             return 2
         if result is None:
             return 0

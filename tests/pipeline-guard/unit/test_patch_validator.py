@@ -34,7 +34,9 @@ def _applied_patch_for(patch_files: list[dict[str, Any]]) -> bytes:
             not isinstance(path, str)
             or type(lines_changed) is not int
             or lines_changed < 0
-            or (changed_content is not _MISSING and not isinstance(changed_content, str))
+            or (
+                changed_content is not _MISSING and not isinstance(changed_content, str)
+            )
         ):
             continue
         key = path.casefold()
@@ -126,9 +128,20 @@ def _git_diff_with_large_blocked_hunk(tmp_path: Path) -> bytes:
     source.parent.mkdir(parents=True)
     source.write_text("select baseline;\n" * 50, encoding="utf-8")
 
-    for arguments in (("init", "-q"), ("add", "models/a.sql"), ("commit", "-qm", "baseline")):
+    for arguments in (
+        ("init", "-q"),
+        ("add", "models/a.sql"),
+        ("commit", "-qm", "baseline"),
+    ):
         completed = subprocess.run(
-            ["git", "-c", "user.name=Tests", "-c", "user.email=tests@example.invalid", *arguments],
+            [
+                "git",
+                "-c",
+                "user.name=Tests",
+                "-c",
+                "user.email=tests@example.invalid",
+                *arguments,
+            ],
             cwd=repository,
             check=False,
             capture_output=True,
@@ -153,7 +166,11 @@ def _git_diff_with_cr_added_content(tmp_path: Path, content: bytes) -> bytes:
     source.parent.mkdir(parents=True)
     source.write_bytes(b"select baseline;\n")
 
-    for arguments in (("init", "-q"), ("add", "models/a.sql"), ("commit", "-qm", "baseline")):
+    for arguments in (
+        ("init", "-q"),
+        ("add", "models/a.sql"),
+        ("commit", "-qm", "baseline"),
+    ):
         completed = subprocess.run(
             [
                 "git",
@@ -173,7 +190,15 @@ def _git_diff_with_cr_added_content(tmp_path: Path, content: bytes) -> bytes:
 
     source.write_bytes(content + b"\n")
     completed = subprocess.run(
-        ["git", "-c", "core.autocrlf=false", "diff", "--no-ext-diff", "--", "models/a.sql"],
+        [
+            "git",
+            "-c",
+            "core.autocrlf=false",
+            "diff",
+            "--no-ext-diff",
+            "--",
+            "models/a.sql",
+        ],
         cwd=repository,
         check=False,
         capture_output=True,
@@ -248,7 +273,13 @@ def test_valid_patch_within_limits_is_accepted() -> None:
 
 
 def test_accepted_patch_is_bound_to_its_base_commit_and_content_hash() -> None:
-    files = [_file("models/staging/stg_orders.sql", lines_changed=10, changed_content="select 1\n")]
+    files = [
+        _file(
+            "models/staging/stg_orders.sql",
+            lines_changed=10,
+            changed_content="select 1\n",
+        )
+    ]
 
     applied_patch = _applied_patch_for(files)
     result = validate_patch(
@@ -314,12 +345,16 @@ def test_patch_requires_a_complete_verified_hexadecimal_base_commit(
 
 
 @pytest.mark.parametrize("applied_patch", [None, b"", "diff --git a/a.sql b/a.sql"])
-def test_patch_requires_exact_nonempty_applied_patch_bytes(applied_patch: object) -> None:
+def test_patch_requires_exact_nonempty_applied_patch_bytes(
+    applied_patch: object,
+) -> None:
     with pytest.raises(PatchValidationError, match="applied_patch"):
         validate_patch([_file("models/a.sql")], _config(), applied_patch=applied_patch)
 
 
-def test_applied_patch_paths_must_match_the_files_validated_by_safety_controls() -> None:
+def test_applied_patch_paths_must_match_the_files_validated_by_safety_controls() -> (
+    None
+):
     result = validate_patch(
         [_file("models/a.sql", changed_content="select 1\n")],
         _config(),
@@ -332,13 +367,16 @@ def test_applied_patch_paths_must_match_the_files_validated_by_safety_controls()
     assert result["accepted"] is False
     assert result["requires_human_review"] is True
     assert any(
-        "applied_patch paths do not match" in violation for violation in result["violations"]
+        "applied_patch paths do not match" in violation
+        for violation in result["violations"]
     )
     assert "base_commit" not in result
     assert "patch_hash" not in result
 
 
-def test_applied_hunks_are_the_source_for_content_and_volume_controls(tmp_path: Path) -> None:
+def test_applied_hunks_are_the_source_for_content_and_volume_controls(
+    tmp_path: Path,
+) -> None:
     applied_patch = _git_diff_with_large_blocked_hunk(tmp_path)
     result = validate_patch(
         [_file("models/a.sql", lines_changed=1, changed_content="select 1\n")],
@@ -355,8 +393,13 @@ def test_applied_hunks_are_the_source_for_content_and_volume_controls(tmp_path: 
 
     assert result["accepted"] is False
     assert result["requires_human_review"] is True
-    assert any("lines_changed does not match applied_patch" in v for v in result["violations"])
-    assert any("changed_content does not match applied_patch" in v for v in result["violations"])
+    assert any(
+        "lines_changed does not match applied_patch" in v for v in result["violations"]
+    )
+    assert any(
+        "changed_content does not match applied_patch" in v
+        for v in result["violations"]
+    )
     assert any("blocked_patterns" in v for v in result["violations"])
     assert any("max_lines_per_file" in v for v in result["violations"])
     assert "base_commit" not in result
@@ -433,7 +476,9 @@ def test_bare_cr_does_not_turn_content_into_a_diff_header() -> None:
     assert "patch_hash" not in result
 
 
-def test_staged_symlink_to_sensitive_path_is_rejected_without_provenance(tmp_path: Path) -> None:
+def test_staged_symlink_to_sensitive_path_is_rejected_without_provenance(
+    tmp_path: Path,
+) -> None:
     applied_patch = _git_diff_with_staged_symlink(tmp_path)
     result = validate_patch(
         [
@@ -468,7 +513,10 @@ def test_regular_file_mode_change_is_rejected_without_provenance() -> None:
 
     assert result["accepted"] is False
     assert result["requires_human_review"] is True
-    assert any("mode changes are not allowed" in violation for violation in result["violations"])
+    assert any(
+        "mode changes are not allowed" in violation
+        for violation in result["violations"]
+    )
     assert "base_commit" not in result
     assert "patch_hash" not in result
 
@@ -482,7 +530,9 @@ def test_applied_patch_without_git_headers_is_rejected_without_provenance() -> N
 
     assert result["accepted"] is False
     assert result["requires_human_review"] is True
-    assert any("must contain at least one diff --git header" in v for v in result["violations"])
+    assert any(
+        "must contain at least one diff --git header" in v for v in result["violations"]
+    )
     assert "base_commit" not in result
     assert "patch_hash" not in result
 
@@ -613,7 +663,9 @@ def test_blocked_pattern_in_changed_content_is_rejected() -> None:
         ),
     )
     assert result["accepted"] is False
-    assert any("blocked_patterns" in v or "stg_orders" in v for v in result["violations"])
+    assert any(
+        "blocked_patterns" in v or "stg_orders" in v for v in result["violations"]
+    )
     assert result["requires_human_review"] is True
 
 
@@ -633,7 +685,9 @@ def test_dot_prefix_path_matching_sensitive_is_rejected() -> None:
 
 def test_dotdot_traversal_into_sensitive_path_is_rejected() -> None:
     with pytest.raises(PatchValidationError):
-        validate_patch([_file("models/../migrations/0001_init.sql", lines_changed=1)], _config())
+        validate_patch(
+            [_file("models/../migrations/0001_init.sql", lines_changed=1)], _config()
+        )
 
 
 def test_absolute_path_is_rejected() -> None:
@@ -668,7 +722,9 @@ def test_case_insensitive_blocked_content_pattern_is_rejected() -> None:
         ),
     )
     assert result["accepted"] is False
-    assert any("blocked_patterns" in v or "stg_orders" in v for v in result["violations"])
+    assert any(
+        "blocked_patterns" in v or "stg_orders" in v for v in result["violations"]
+    )
     assert result["requires_human_review"] is True
 
 
@@ -785,7 +841,9 @@ def test_duplicate_paths_are_merged_before_volume_check() -> None:
     ]
     result = validate_patch(files, _config())
     assert result["accepted"] is False
-    assert any("max_lines_per_file" in v or "stg_orders" in v for v in result["violations"])
+    assert any(
+        "max_lines_per_file" in v or "stg_orders" in v for v in result["violations"]
+    )
 
 
 def test_case_variant_paths_are_merged_before_volume_check() -> None:
@@ -814,12 +872,16 @@ def test_negative_duplicate_entry_cannot_cancel_a_positive_change() -> None:
 
     assert result["accepted"] is False
     assert result["requires_human_review"] is True
-    assert any("invalid lines_changed" in violation for violation in result["violations"])
+    assert any(
+        "invalid lines_changed" in violation for violation in result["violations"]
+    )
     assert any("max_lines_per_file" in violation for violation in result["violations"])
 
 
 @pytest.mark.parametrize("lines_changed", ["5", True])
-def test_invalid_lines_changed_is_a_violation_not_a_runtime_error(lines_changed: object) -> None:
+def test_invalid_lines_changed_is_a_violation_not_a_runtime_error(
+    lines_changed: object,
+) -> None:
     result = validate_patch(
         [_file("models/a.sql", lines_changed=lines_changed), _file("models/a.sql", 5)],
         _config(),
@@ -827,7 +889,9 @@ def test_invalid_lines_changed_is_a_violation_not_a_runtime_error(lines_changed:
 
     assert result["accepted"] is False
     assert result["requires_human_review"] is True
-    assert any("invalid lines_changed" in violation for violation in result["violations"])
+    assert any(
+        "invalid lines_changed" in violation for violation in result["violations"]
+    )
 
 
 def test_single_segment_editable_glob_does_not_allow_nested_paths() -> None:
@@ -859,7 +923,9 @@ def test_windows_ambiguous_sensitive_paths_are_rejected(path: str) -> None:
 
     assert result["accepted"] is False
     assert result["requires_human_review"] is True
-    assert any("ambiguous on Windows" in violation for violation in result["violations"])
+    assert any(
+        "ambiguous on Windows" in violation for violation in result["violations"]
+    )
     assert any("sensitive_paths" in violation for violation in result["violations"])
 
 
@@ -924,11 +990,15 @@ def test_non_string_changed_content_fails_closed() -> None:
 
     assert result["accepted"] is False
     assert result["requires_human_review"] is True
-    assert any("invalid changed_content" in violation for violation in result["violations"])
+    assert any(
+        "invalid changed_content" in violation for violation in result["violations"]
+    )
 
 
 def test_rejected_patch_does_not_receive_provenance() -> None:
-    result = validate_patch([_file("migrations/0001.sql", changed_content="select 1\n")], _config())
+    result = validate_patch(
+        [_file("migrations/0001.sql", changed_content="select 1\n")], _config()
+    )
 
     assert result["accepted"] is False
     assert "base_commit" not in result

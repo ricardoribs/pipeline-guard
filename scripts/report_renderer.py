@@ -28,23 +28,32 @@ class ReportRenderingError(ValueError):
     """Raised when report inputs are invalid or refer to different diagnoses."""
 
 
-def render_report(diagnosis: object, eligibility_decision: object) -> tuple[str, dict[str, Any]]:
+def render_report(
+    diagnosis: object, eligibility_decision: object
+) -> tuple[str, dict[str, Any]]:
     """Return Markdown and an equivalent JSON document without side effects."""
     diagnosis_document = _validate(diagnosis, "pipeline_diagnosis_v1")
     decision_document = _validate(eligibility_decision, "eligibility_decision_v1")
     if diagnosis_document["incident_id"] != decision_document["incident_id"]:
-        raise ReportRenderingError("diagnosis and eligibility decision incident_id differ")
+        raise ReportRenderingError(
+            "diagnosis and eligibility decision incident_id differ"
+        )
     canonical = json.dumps(
         diagnosis_document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
     expected_hash = "sha256:" + hashlib.sha256(canonical).hexdigest()
     if decision_document["diagnosis_hash"] != expected_hash:
-        raise ReportRenderingError("eligibility decision diagnosis_hash does not match diagnosis")
+        raise ReportRenderingError(
+            "eligibility decision diagnosis_hash does not match diagnosis"
+        )
 
     # Copy through JSON so callers cannot mutate the report through nested input objects.
     report = json.loads(
         json.dumps(
-            {"diagnosis": diagnosis_document, "eligibility_decision": decision_document},
+            {
+                "diagnosis": diagnosis_document,
+                "eligibility_decision": decision_document,
+            },
             ensure_ascii=False,
             allow_nan=False,
         )
@@ -66,11 +75,16 @@ def render_report(diagnosis: object, eligibility_decision: object) -> tuple[str,
     ]
     if "impact_summary" in diagnosis_document:
         lines.extend(["", "## Impact", "", _text(diagnosis_document["impact_summary"])])
-    _items(lines, "Affected resources", diagnosis_document.get("affected_resources", []))
+    _items(
+        lines, "Affected resources", diagnosis_document.get("affected_resources", [])
+    )
     lines.extend(["", "## Evidence", ""])
     citations = diagnosis_document["evidence_citations"]
     lines.extend(
-        [f"- {_text(item['evidence_id'])}: {_text(item['claim'])}" for item in citations]
+        [
+            f"- {_text(item['evidence_id'])}: {_text(item['claim'])}"
+            for item in citations
+        ]
         or ["No evidence citations supplied."]
     )
     lines.extend(
@@ -92,13 +106,21 @@ def render_report(diagnosis: object, eligibility_decision: object) -> tuple[str,
     _items(lines, "Independent signals used", decision_document.get("signals_used", []))
     if "recommended_action" in diagnosis_document:
         lines.extend(
-            ["", "## Recommended action", "", _text(diagnosis_document["recommended_action"])]
+            [
+                "",
+                "## Recommended action",
+                "",
+                _text(diagnosis_document["recommended_action"]),
+            ]
         )
     _items(lines, "Diagnosis limitations", diagnosis_document.get("limitations", []))
     _items(lines, "Eligibility limitations", decision_document.get("limitations", []))
     if "adapter_details" in diagnosis_document:
         details = json.dumps(
-            diagnosis_document["adapter_details"], ensure_ascii=False, sort_keys=True, indent=2
+            diagnosis_document["adapter_details"],
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=2,
         )
         # An indented code block keeps arbitrary adapter content inert in Markdown.
         lines.extend(["", "## Adapter details", ""])
@@ -111,7 +133,9 @@ def write_report(
 ) -> tuple[Path, Path]:
     """Validate both inputs, then write report.md and report.json to a host-selected directory."""
     markdown, report = render_report(diagnosis, eligibility_decision)
-    json_report = json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    json_report = (
+        json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     markdown_path = output_dir / "report.md"
     json_path = output_dir / "report.json"
@@ -151,7 +175,9 @@ def _items(lines: list[str], title: str, items: Sequence[str]) -> None:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate a channel-neutral pipeline report.")
+    parser = argparse.ArgumentParser(
+        description="Generate a channel-neutral pipeline report."
+    )
     parser.add_argument("diagnosis", type=Path)
     parser.add_argument("eligibility_decision", type=Path)
     parser.add_argument("--output-dir", type=Path, required=True)

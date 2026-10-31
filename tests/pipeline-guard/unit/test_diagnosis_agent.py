@@ -12,7 +12,9 @@ from jsonschema import Draft202012Validator
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 AGENT_PATH = PLUGIN_ROOT / "agents" / "diagnosis-agent.md"
-DIAGNOSIS_SCHEMA_PATH = PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+DIAGNOSIS_SCHEMA_PATH = (
+    PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+)
 
 
 def _load_profile() -> tuple[dict[str, Any], str]:
@@ -77,8 +79,12 @@ def test_reference_diagnosis_is_valid_and_cites_only_supplied_evidence() -> None
     Draft202012Validator(schema).validate(diagnosis)
 
     assert diagnosis["incident_id"] == reference_input["incident"]["incident_id"]
-    supplied_evidence_ids = {evidence["evidence_id"] for evidence in reference_input["evidences"]}
-    cited_evidence_ids = {citation["evidence_id"] for citation in diagnosis["evidence_citations"]}
+    supplied_evidence_ids = {
+        evidence["evidence_id"] for evidence in reference_input["evidences"]
+    }
+    cited_evidence_ids = {
+        citation["evidence_id"] for citation in diagnosis["evidence_citations"]
+    }
     assert cited_evidence_ids
     assert cited_evidence_ids <= supplied_evidence_ids
 

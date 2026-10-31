@@ -48,7 +48,9 @@ class ExecutionBudget:
         clock: Callable[[], float] = monotonic,
     ) -> None:
         runtime = project_config.get("runtime")
-        limits = runtime.get("execution_budget") if isinstance(runtime, Mapping) else None
+        limits = (
+            runtime.get("execution_budget") if isinstance(runtime, Mapping) else None
+        )
         if not isinstance(limits, Mapping) or set(limits) != _LIMIT_FIELDS:
             raise ExecutionBudgetConfigurationError(
                 "runtime.execution_budget must contain max_tool_calls, max_seconds and max_tokens"
@@ -56,7 +58,9 @@ class ExecutionBudget:
         for name in sorted(_LIMIT_FIELDS):
             value = limits[name]
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-                raise ExecutionBudgetConfigurationError(f"{name} must be a positive integer")
+                raise ExecutionBudgetConfigurationError(
+                    f"{name} must be a positive integer"
+                )
 
         self._max_tool_calls: int = limits["max_tool_calls"]
         self._max_seconds: int = limits["max_seconds"]

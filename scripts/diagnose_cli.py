@@ -60,7 +60,9 @@ def load_agent_prompt(document: str | None = None) -> str:
     text = AGENT_PATH.read_text(encoding="utf-8") if document is None else document
     parts = text.split("---", maxsplit=2)
     if len(parts) != 3 or not parts[2].strip():
-        raise ValueError("diagnosis-agent must contain frontmatter and a non-empty prompt")
+        raise ValueError(
+            "diagnosis-agent must contain frontmatter and a non-empty prompt"
+        )
     return parts[2].strip()
 
 
@@ -130,7 +132,9 @@ class DiagnosisRunner:
         budget.record_tokens(max(0, actual_input - input_tokens) + usage.output_tokens)
         if response.stop_reason != "end_turn":
             return None
-        content = "".join(block.text for block in response.content if block.type == "text")
+        content = "".join(
+            block.text for block in response.content if block.type == "text"
+        )
         try:
             return json.loads(content)
         except json.JSONDecodeError:
@@ -180,16 +184,18 @@ def run_diagnosis(
     adapter_name = project_config["pipeline"]["adapter"]
     factory = registry.resolve(adapter_name, allowed_names=registry.registered_names)
     root = project_root / project_config["pipeline"].get("root", ".")
-    adapter: Any = factory(artifacts_dir=root / "target") if adapter_name == "dbt" else factory()
+    adapter: Any = (
+        factory(artifacts_dir=root / "target") if adapter_name == "dbt" else factory()
+    )
     evidences: list[dict[str, Any]] = []
     raw_diagnosis: object = None
     exhausted = False
     try:
         collected = active_budget.call_tool(lambda: adapter.run(validated_incident))
         schema = json.loads(
-            (PLUGIN_ROOT / "contracts/schema/pipeline_adapter_interface.schema.json").read_text(
-                encoding="utf-8"
-            )
+            (
+                PLUGIN_ROOT / "contracts/schema/pipeline_adapter_interface.schema.json"
+            ).read_text(encoding="utf-8")
         )
         Draft202012Validator(schema).validate(collected)
         safe_collection = redact_payload(collected)
@@ -197,7 +203,8 @@ def run_diagnosis(
         for evidence in evidences:
             if "content" in evidence:
                 evidence["hash"] = (
-                    "sha256:" + hashlib.sha256(evidence["content"].encode("utf-8")).hexdigest()
+                    "sha256:"
+                    + hashlib.sha256(evidence["content"].encode("utf-8")).hexdigest()
                 )
         if evidences:
             raw_diagnosis = runner(
@@ -277,14 +284,18 @@ def _persist_terminal_manifest(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Diagnose a pipeline incident without prompts.")
+    parser = argparse.ArgumentParser(
+        description="Diagnose a pipeline incident without prompts."
+    )
     parser.add_argument(
         "input_file",
         nargs="?",
         type=Path,
         help="JSON input file; reads stdin when omitted.",
     )
-    parser.add_argument("--config", type=Path, help="materialized project configuration")
+    parser.add_argument(
+        "--config", type=Path, help="materialized project configuration"
+    )
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
     parser.add_argument("--model", help="diagnostic model; defaults to ANTHROPIC_MODEL")
     args = parser.parse_args(argv)
@@ -325,12 +336,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         config = validate_config(args.config)
     except ConfigValidationError as error:
-        print(f"Invalid project configuration: {error.code} at {error.field}", file=sys.stderr)
+        print(
+            f"Invalid project configuration: {error.code} at {error.field}",
+            file=sys.stderr,
+        )
         return 2
 
     runner = DiagnosisRunner(args.model)
     if not runner.model:
-        print("Invalid project configuration: set ANTHROPIC_MODEL or --model", file=sys.stderr)
+        print(
+            "Invalid project configuration: set ANTHROPIC_MODEL or --model",
+            file=sys.stderr,
+        )
         return 2
 
     run_id: str | None = None
@@ -341,7 +358,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if config.get("runtime", {}).get("artifact_store", "local") != "local":
             raise ValueError("the headless CLI requires the local artifact store")
         if config.get("evidence_providers"):
-            raise ValueError("the headless CLI currently collects adapter evidence only")
+            raise ValueError(
+                "the headless CLI currently collects adapter evidence only"
+            )
         attempt = {
             "incident": incident,
             "config": config,
@@ -377,12 +396,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             ("eligibility.json", result["eligibility_decision"]),
             ("report.json", result["report"]),
         ):
-            serialized = json.dumps(document, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            serialized = json.dumps(
+                document, ensure_ascii=False, sort_keys=True
+            ).encode("utf-8")
             if (
                 not store.put(run_id, reference, serialized)
                 and store.get(run_id, reference) != serialized
             ):
-                raise ValueError("an immutable result differs for this diagnosis attempt")
+                raise ValueError(
+                    "an immutable result differs for this diagnosis attempt"
+                )
         markdown = result["report_markdown"].encode("utf-8")
         if (
             not store.put(run_id, "report.md", markdown)
@@ -422,12 +445,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     status="FAILED",
                     started_at=started_at,
                     finished_at=datetime.now(UTC),
-                    limitations=("Operational diagnosis failure: " + type(error).__name__,),
+                    limitations=(
+                        "Operational diagnosis failure: " + type(error).__name__,
+                    ),
                 )
                 persist_run_manifest(failed_manifest, artifact_store=store)
             except (OSError, ValueError, TypeError) as manifest_error:
                 print(
-                    "Could not persist failed run_manifest_v1: " + type(manifest_error).__name__,
+                    "Could not persist failed run_manifest_v1: "
+                    + type(manifest_error).__name__,
                     file=sys.stderr,
                 )
         return 1

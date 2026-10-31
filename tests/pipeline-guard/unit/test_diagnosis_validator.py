@@ -31,7 +31,9 @@ def _valid_diagnosis() -> dict[str, Any]:
         "confidence": "HIGH",
         "cause_status": "CONFIRMED",
         "cause": "A referenced model failed.",
-        "evidence_citations": [{"evidence_id": "evidence-1", "claim": "The model run failed."}],
+        "evidence_citations": [
+            {"evidence_id": "evidence-1", "claim": "The model run failed."}
+        ],
     }
 
 
@@ -103,7 +105,9 @@ def test_unsafe_diagnoses_become_unknown(
     assert result["cause_status"] == "UNKNOWN"
     assert result["evidence_citations"] == []
     assert result["limitations"] == [limitation]
-    schema_path = PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+    schema_path = (
+        PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+    )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     Draft202012Validator(schema).validate(result)
 
@@ -148,4 +152,6 @@ def test_diagnosis_for_a_different_incident_becomes_unknown() -> None:
 @pytest.mark.parametrize("incident_id", ["", "  "])
 def test_trusted_incident_id_must_be_non_empty(incident_id: str) -> None:
     with pytest.raises(DiagnosisValidationError, match="incident_id"):
-        validate_diagnosis(_valid_diagnosis(), incident_id=incident_id, evidences=EVIDENCES)
+        validate_diagnosis(
+            _valid_diagnosis(), incident_id=incident_id, evidences=EVIDENCES
+        )

@@ -31,7 +31,9 @@ class TestAdapterSchemaValidity:
     def test_schema_has_additional_properties_false(self, adapter_schema: dict) -> None:
         assert adapter_schema.get("additionalProperties") is False
 
-    def test_evidence_items_have_additional_properties_false(self, adapter_schema: dict) -> None:
+    def test_evidence_items_have_additional_properties_false(
+        self, adapter_schema: dict
+    ) -> None:
         evidence_items = adapter_schema["properties"]["evidences"]["items"]
         assert evidence_items.get("additionalProperties") is False
 
@@ -91,7 +93,13 @@ class TestAdapterOutputRejection:
 
     @pytest.mark.parametrize(
         "missing_field",
-        ["schema_version", "adapter_name", "incident_id", "evidences", "adapter_details"],
+        [
+            "schema_version",
+            "adapter_name",
+            "incident_id",
+            "evidences",
+            "adapter_details",
+        ],
     )
     def test_rejects_missing_required_top_level_field(
         self,

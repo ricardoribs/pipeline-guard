@@ -86,7 +86,9 @@ class LocalArtifactStore:
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary_path: Path | None = None
         try:
-            with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as temporary:
+            with tempfile.NamedTemporaryFile(
+                dir=target.parent, delete=False
+            ) as temporary:
                 temporary_path = Path(temporary.name)
                 temporary.write(artifact)
                 temporary.flush()
@@ -137,7 +139,9 @@ class LocalArtifactStore:
         if run_id in {".", ".."}:
             raise ValueError("run_id cannot be a path traversal component")
         if not isinstance(reference, str) or not reference or "\x00" in reference:
-            raise ValueError("reference must be a non-empty string without NUL characters")
+            raise ValueError(
+                "reference must be a non-empty string without NUL characters"
+            )
 
         # References are opaque identifiers, not paths supplied by a consumer.
         reference_hash = hashlib.sha256(reference.encode("utf-8")).hexdigest()

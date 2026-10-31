@@ -213,7 +213,9 @@ def test_registered_prompt_hook_does_not_intercept_unrelated_sensitive_prompt() 
 
 
 @pytest.mark.parametrize("tool_name", ["Bash", "PowerShell"])
-def test_registered_hook_sanitizes_headless_diagnosis_invocation(tool_name: str) -> None:
+def test_registered_hook_sanitizes_headless_diagnosis_invocation(
+    tool_name: str,
+) -> None:
     email = "pipeline.owner@example.com"
     event = {
         "hook_event_name": "PreToolUse",
@@ -243,7 +245,9 @@ def test_registered_hooks_are_scoped_to_diagnosis_calls() -> None:
 
 
 @pytest.mark.parametrize("tool_name", ["Bash", "PowerShell"])
-def test_documented_skill_command_matches_registered_shell_filter(tool_name: str) -> None:
+def test_documented_skill_command_matches_registered_shell_filter(
+    tool_name: str,
+) -> None:
     command = _documented_skill_command()
     hook_filter = HOOK_FILTERS[tool_name]
     prefix = f"{tool_name}("

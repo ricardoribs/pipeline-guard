@@ -76,7 +76,9 @@ def _confirmation(**overrides: object) -> dict[str, Any]:
     }
 
 
-def test_confirmation_records_an_approval_accepted_by_the_real_validator(tmp_path: Path) -> None:
+def test_confirmation_records_an_approval_accepted_by_the_real_validator(
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "approval.json"
 
     approval = record_local_approval(
@@ -123,7 +125,8 @@ def test_non_explicit_confirmation_does_not_create_an_approval(
 
 
 @pytest.mark.parametrize(
-    "field", ["actor", "incident_id", "diagnosis_hash", "base_commit", "confirmed_at", "nonce"]
+    "field",
+    ["actor", "incident_id", "diagnosis_hash", "base_commit", "confirmed_at", "nonce"],
 )
 @pytest.mark.parametrize("value", [None, "", "   "])
 def test_missing_identity_or_context_does_not_create_an_approval(
@@ -158,13 +161,18 @@ def test_missing_confirmation_reference_does_not_create_an_approval(
     assert not output.exists()
 
 
-@pytest.mark.parametrize("nonce", [1, "a" * 63, "a" * 65, "A" * 64, "g" * 64, "../used"])
+@pytest.mark.parametrize(
+    "nonce", [1, "a" * 63, "a" * 65, "A" * 64, "g" * 64, "../used"]
+)
 def test_invalid_nonce_is_rejected(tmp_path: Path, nonce: object) -> None:
     output = tmp_path / "approval.json"
 
     with pytest.raises(LocalApprovalError, match="nonce"):
         record_local_approval(
-            _confirmation(nonce=nonce), output_path=output, max_age=MAX_AGE, current_time=NOW
+            _confirmation(nonce=nonce),
+            output_path=output,
+            max_age=MAX_AGE,
+            current_time=NOW,
         )
 
     assert not output.exists()
@@ -196,12 +204,18 @@ def test_validator_failure_prevents_persistence(tmp_path: Path) -> None:
         )
     assert not output.exists()
     # A refused input has not consumed the nonce; a valid attempt can still use it.
-    record_local_approval(_confirmation(), output_path=output, max_age=MAX_AGE, current_time=NOW)
+    record_local_approval(
+        _confirmation(), output_path=output, max_age=MAX_AGE, current_time=NOW
+    )
 
 
-def test_existing_approval_is_preserved_without_refreshing_timestamp(tmp_path: Path) -> None:
+def test_existing_approval_is_preserved_without_refreshing_timestamp(
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "approval.json"
-    record_local_approval(_confirmation(), output_path=output, max_age=MAX_AGE, current_time=NOW)
+    record_local_approval(
+        _confirmation(), output_path=output, max_age=MAX_AGE, current_time=NOW
+    )
     original = output.read_bytes()
 
     with pytest.raises(FileExistsError):
@@ -214,11 +228,15 @@ def test_existing_approval_is_preserved_without_refreshing_timestamp(tmp_path: P
     assert output.read_bytes() == original
 
 
-def test_reused_confirmation_at_another_path_is_rejected_while_still_valid(tmp_path: Path) -> None:
+def test_reused_confirmation_at_another_path_is_rejected_while_still_valid(
+    tmp_path: Path,
+) -> None:
     confirmation = _confirmation()
     first_output = tmp_path / "first" / "approval.json"
     second_output = tmp_path / "second" / "approval.json"
-    record_local_approval(confirmation, output_path=first_output, max_age=MAX_AGE, current_time=NOW)
+    record_local_approval(
+        confirmation, output_path=first_output, max_age=MAX_AGE, current_time=NOW
+    )
     original = first_output.read_bytes()
 
     with pytest.raises(LocalApprovalError, match="nonce has already been used"):
@@ -234,9 +252,14 @@ def test_reused_confirmation_at_another_path_is_rejected_while_still_valid(tmp_p
     assert confirmation == _confirmation()
 
 
-def test_used_nonce_cannot_be_rebound_to_a_new_timestamp_or_context(tmp_path: Path) -> None:
+def test_used_nonce_cannot_be_rebound_to_a_new_timestamp_or_context(
+    tmp_path: Path,
+) -> None:
     record_local_approval(
-        _confirmation(), output_path=tmp_path / "first.json", max_age=MAX_AGE, current_time=NOW
+        _confirmation(),
+        output_path=tmp_path / "first.json",
+        max_age=MAX_AGE,
+        current_time=NOW,
     )
     second_output = tmp_path / "second.json"
 
@@ -257,12 +280,19 @@ def test_used_nonce_cannot_be_rebound_to_a_new_timestamp_or_context(tmp_path: Pa
     assert not second_output.exists()
 
 
-def test_new_confirmation_with_another_nonce_can_authorize_the_same_context(tmp_path: Path) -> None:
+def test_new_confirmation_with_another_nonce_can_authorize_the_same_context(
+    tmp_path: Path,
+) -> None:
     record_local_approval(
-        _confirmation(), output_path=tmp_path / "first.json", max_age=MAX_AGE, current_time=NOW
+        _confirmation(),
+        output_path=tmp_path / "first.json",
+        max_age=MAX_AGE,
+        current_time=NOW,
     )
     approval = record_local_approval(
-        _confirmation(nonce="b" * 64, confirmed_at=(NOW + timedelta(seconds=1)).isoformat()),
+        _confirmation(
+            nonce="b" * 64, confirmed_at=(NOW + timedelta(seconds=1)).isoformat()
+        ),
         output_path=tmp_path / "second.json",
         max_age=MAX_AGE,
         current_time=NOW + timedelta(seconds=1),
@@ -277,7 +307,10 @@ def test_nonce_stays_consumed_after_output_failure(tmp_path: Path) -> None:
     occupied_output.write_text("existing file", encoding="utf-8")
     with pytest.raises(FileExistsError):
         record_local_approval(
-            _confirmation(), output_path=occupied_output, max_age=MAX_AGE, current_time=NOW
+            _confirmation(),
+            output_path=occupied_output,
+            max_age=MAX_AGE,
+            current_time=NOW,
         )
     retry_output = tmp_path / "retry.json"
 
@@ -290,7 +323,9 @@ def test_nonce_stays_consumed_after_output_failure(tmp_path: Path) -> None:
     assert not retry_output.exists()
 
 
-def test_nonce_store_write_failure_prevents_issuance(tmp_path: Path, plugin_data_dir: Path) -> None:
+def test_nonce_store_write_failure_prevents_issuance(
+    tmp_path: Path, plugin_data_dir: Path
+) -> None:
     plugin_data_dir.mkdir()
     (plugin_data_dir / "local-approval-nonces").write_text("occupied", encoding="utf-8")
     output = tmp_path / "approval.json"
@@ -303,13 +338,18 @@ def test_nonce_store_write_failure_prevents_issuance(tmp_path: Path, plugin_data
     assert not output.exists()
 
 
-def test_reused_confirmation_at_another_path_cannot_renew_expired_approval(tmp_path: Path) -> None:
+def test_reused_confirmation_at_another_path_cannot_renew_expired_approval(
+    tmp_path: Path,
+) -> None:
     confirmed_at = NOW.replace(hour=9)
     confirmation = _confirmation(confirmed_at=confirmed_at.isoformat())
     first_output = tmp_path / "approval-morning.json"
     second_output = tmp_path / "approval-evening.json"
     record_local_approval(
-        confirmation, output_path=first_output, max_age=MAX_AGE, current_time=confirmed_at
+        confirmation,
+        output_path=first_output,
+        max_age=MAX_AGE,
+        current_time=confirmed_at,
     )
     original = first_output.read_bytes()
 
@@ -326,13 +366,17 @@ def test_reused_confirmation_at_another_path_cannot_renew_expired_approval(tmp_p
     assert confirmation["confirmed_at"] == confirmed_at.isoformat()
 
 
-def test_confirmation_without_timestamp_cannot_be_renewed_implicitly(tmp_path: Path) -> None:
+def test_confirmation_without_timestamp_cannot_be_renewed_implicitly(
+    tmp_path: Path,
+) -> None:
     confirmation = _confirmation()
     confirmation.pop("confirmed_at")
     output = tmp_path / "approval.json"
 
     with pytest.raises(LocalApprovalError, match="confirmed_at"):
-        record_local_approval(confirmation, output_path=output, max_age=MAX_AGE, current_time=NOW)
+        record_local_approval(
+            confirmation, output_path=output, max_age=MAX_AGE, current_time=NOW
+        )
 
     assert not output.exists()
 
@@ -468,7 +512,12 @@ def test_cli_explicit_plugin_data_dir_cannot_fall_back_when_relative(
     confirmation = _confirmation(confirmed_at=datetime.now(UTC).isoformat())
 
     completed = _run_cli(
-        tmp_path, confirmation, "--max-age-seconds", "300", "--plugin-data-dir", data_dir
+        tmp_path,
+        confirmation,
+        "--max-age-seconds",
+        "300",
+        "--plugin-data-dir",
+        data_dir,
     )
 
     assert completed.returncode == 2
@@ -522,7 +571,9 @@ def test_cli_refusal_finishes_without_creating_an_approval(
     assert not (tmp_path / "approval.json").exists()
 
 
-def test_cli_rejects_an_expired_confirmation(tmp_path: Path, plugin_data_dir: Path) -> None:
+def test_cli_rejects_an_expired_confirmation(
+    tmp_path: Path, plugin_data_dir: Path
+) -> None:
     confirmation = _confirmation(
         confirmed_at=(datetime.now(UTC) - timedelta(minutes=10)).isoformat()
     )

@@ -22,14 +22,18 @@ pytestmark = pytest.mark.api
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 DBT_FIXTURE_DIR = PLUGIN_ROOT / "tests" / "pipeline-guard" / "fixtures" / "dbt"
 AGENT_PATH = PLUGIN_ROOT / "agents" / "diagnosis-agent.md"
-DIAGNOSIS_SCHEMA_PATH = PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+DIAGNOSIS_SCHEMA_PATH = (
+    PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+)
 
 if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
 DbtAdapter = import_module("adapters.dbt").DbtAdapter
 validate_diagnosis = import_module("scripts.diagnosis_validator").validate_diagnosis
-validate_incident_input = import_module("scripts.incident_validator").validate_incident_input
+validate_incident_input = import_module(
+    "scripts.incident_validator"
+).validate_incident_input
 
 DBT_DETAIL_KEYS = {
     "adapter_response",
@@ -109,7 +113,12 @@ def _claude_executable() -> str | None:
         if command_shim := shutil.which("claude.cmd"):
             npm_root = Path(command_shim).parent
             native_executable = (
-                npm_root / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
+                npm_root
+                / "node_modules"
+                / "@anthropic-ai"
+                / "claude-code"
+                / "bin"
+                / "claude.exe"
             )
             if native_executable.is_file():
                 return str(native_executable)
@@ -138,7 +147,9 @@ def _diagnosis_from_result(event: Mapping[str, object]) -> dict[str, Any]:
     """Extract structured output, with a strict JSON fallback for agent sessions."""
     structured_output = event.get("structured_output")
     if structured_output is not None:
-        assert isinstance(structured_output, dict), "Claude structured_output must be a JSON object"
+        assert isinstance(structured_output, dict), (
+            "Claude structured_output must be a JSON object"
+        )
         return structured_output
 
     raw_result = event.get("result")
@@ -168,7 +179,9 @@ def _run_live_agent(
     )
     diagnosis_schema = json.loads(DIAGNOSIS_SCHEMA_PATH.read_text(encoding="utf-8"))
     cli_output_schema = {
-        key: value for key, value in diagnosis_schema.items() if key not in {"$id", "$schema"}
+        key: value
+        for key, value in diagnosis_schema.items()
+        if key not in {"$id", "$schema"}
     }
     before = _workspace_snapshot(workspace)
     claude_executable = _claude_executable()
@@ -237,20 +250,30 @@ def _run_live_agent(
                 "Claude Code is not authenticated. Run `claude auth login` or export "
                 "ANTHROPIC_AUTH_TOKEN before executing API tests."
             )
-        pytest.fail(f"Claude execution failed with exit {completed.returncode}: {failure_detail}")
+        pytest.fail(
+            f"Claude execution failed with exit {completed.returncode}: {failure_detail}"
+        )
 
     assert len(result_events) == 1
-    return _diagnosis_from_result(result_events[0]), events, before, _workspace_snapshot(workspace)
+    return (
+        _diagnosis_from_result(result_events[0]),
+        events,
+        before,
+        _workspace_snapshot(workspace),
+    )
 
 
 def _tool_names(value: object) -> set[str]:
     if isinstance(value, Mapping):
         names = (
             {name}
-            if value.get("type") == "tool_use" and isinstance((name := value.get("name")), str)
+            if value.get("type") == "tool_use"
+            and isinstance((name := value.get("name")), str)
             else set()
         )
-        return names | {name for nested in value.values() for name in _tool_names(nested)}
+        return names | {
+            name for nested in value.values() for name in _tool_names(nested)
+        }
     if isinstance(value, list):
         return {name for nested in value for name in _tool_names(nested)}
     return set()
@@ -312,7 +335,9 @@ def live_dbt_agent_run(tmp_path_factory: pytest.TempPathFactory) -> dict[str, An
     )
     diagnosis_schema = json.loads(DIAGNOSIS_SCHEMA_PATH.read_text(encoding="utf-8"))
     cli_output_schema = {
-        key: value for key, value in diagnosis_schema.items() if key not in {"$id", "$schema"}
+        key: value
+        for key, value in diagnosis_schema.items()
+        if key not in {"$id", "$schema"}
     }
     before = _workspace_snapshot(workspace)
 
@@ -379,7 +404,9 @@ def live_dbt_agent_run(tmp_path_factory: pytest.TempPathFactory) -> dict[str, An
                 "Claude Code is not authenticated. Run `claude auth login` or export "
                 "ANTHROPIC_AUTH_TOKEN before executing API tests."
             )
-        pytest.fail(f"Claude execution failed with exit {completed.returncode}: {failure_detail}")
+        pytest.fail(
+            f"Claude execution failed with exit {completed.returncode}: {failure_detail}"
+        )
 
     assert len(result_events) == 1
     diagnosis = _diagnosis_from_result(result_events[0])
@@ -438,7 +465,9 @@ def test_live_dbt_diagnosis_keeps_specific_details_out_of_core(
 
 
 def _load_reference_cases() -> list[dict[str, Any]]:
-    cases = json.loads((DBT_FIXTURE_DIR / "reference_cases.json").read_text(encoding="utf-8"))
+    cases = json.loads(
+        (DBT_FIXTURE_DIR / "reference_cases.json").read_text(encoding="utf-8")
+    )
     assert isinstance(cases, list)
     assert len(cases) == 12
     assert len({case["case_id"] for case in cases}) == 12
@@ -469,7 +498,8 @@ def live_dbt_reference_runs(
         ):
             artifact_path = case_dir / filename
             artifact_path.write_text(
-                json.dumps(case[filename.removesuffix(".json")], ensure_ascii=False) + "\n",
+                json.dumps(case[filename.removesuffix(".json")], ensure_ascii=False)
+                + "\n",
                 encoding="utf-8",
             )
             digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
@@ -520,7 +550,9 @@ def live_dbt_reference_runs(
     return runs
 
 
-@pytest.mark.parametrize("case_id", [case["case_id"] for case in _load_reference_cases()])
+@pytest.mark.parametrize(
+    "case_id", [case["case_id"] for case in _load_reference_cases()]
+)
 def test_live_dbt_reference_case_has_valid_diagnosis_and_no_writes(
     case_id: str,
     live_dbt_reference_runs: list[dict[str, Any]],
@@ -550,7 +582,9 @@ def test_live_dbt_reference_cases_meet_expected_family_threshold(
         for run in live_dbt_reference_runs
         if run["diagnosis"]["failure_family"] == run["expected_failure_family"]
     ]
-    mismatches = [run["case_id"] for run in live_dbt_reference_runs if run not in correct_cases]
+    mismatches = [
+        run["case_id"] for run in live_dbt_reference_runs if run not in correct_cases
+    ]
     assert len(correct_cases) >= 10, (
         f"Expected at least 10 of 12 reference cases to match; "
         f"matched {len(correct_cases)} of {len(live_dbt_reference_runs)}. "
@@ -565,7 +599,9 @@ def test_live_dbt_blind_cases_stop_safely(
     assert len(blind_runs) == 4
     for run in blind_runs:
         diagnosis = run["diagnosis"]
-        assert diagnosis["failure_family"] == "UNKNOWN" or diagnosis["confidence"] == "LOW", (
+        assert (
+            diagnosis["failure_family"] == "UNKNOWN" or diagnosis["confidence"] == "LOW"
+        ), (
             f"Blind case {run['case_id']} did not stop safely: "
             f"{diagnosis['failure_family']}/{diagnosis['confidence']}"
         )

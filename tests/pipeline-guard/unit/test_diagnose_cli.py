@@ -82,8 +82,14 @@ class _WindowsProcessJob:
                 ],
                 wintypes.BOOL,
             ),
-            "OpenProcess": ([wintypes.DWORD, wintypes.BOOL, wintypes.DWORD], wintypes.HANDLE),
-            "AssignProcessToJobObject": ([wintypes.HANDLE, wintypes.HANDLE], wintypes.BOOL),
+            "OpenProcess": (
+                [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD],
+                wintypes.HANDLE,
+            ),
+            "AssignProcessToJobObject": (
+                [wintypes.HANDLE, wintypes.HANDLE],
+                wintypes.BOOL,
+            ),
             "TerminateJobObject": ([wintypes.HANDLE, wintypes.UINT], wintypes.BOOL),
             "CloseHandle": ([wintypes.HANDLE], wintypes.BOOL),
         }
@@ -94,7 +100,9 @@ class _WindowsProcessJob:
         self.handle = self.api.CreateJobObjectW(None, None)
         self._check(self.handle)
         limits = _JobExtendedLimits()
-        limits.BasicLimitInformation.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        limits.BasicLimitInformation.LimitFlags = (
+            0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        )
         try:
             self._check(
                 self.api.SetInformationJobObject(
@@ -122,7 +130,11 @@ class _WindowsProcessJob:
         accounting = _JobAccounting()
         self._check(
             self.api.QueryInformationJobObject(
-                self.handle, 1, ctypes.byref(accounting), ctypes.sizeof(accounting), None
+                self.handle,
+                1,
+                ctypes.byref(accounting),
+                ctypes.sizeof(accounting),
+                None,
             )
         )
         return accounting.ActiveProcesses
@@ -140,7 +152,9 @@ class _WindowsProcessJob:
         self._check(self.api.CloseHandle(self.handle))
 
 
-def _run_process_tree(command, *, input_text=None, environment=None, timeout=CLI_TIMEOUT_SECONDS):
+def _run_process_tree(
+    command, *, input_text=None, environment=None, timeout=CLI_TIMEOUT_SECONDS
+):
     # Wait for stdin before spawning the command: the Windows job must be assigned first.
     supervisor = (
         "import subprocess, sys\n"
@@ -220,7 +234,9 @@ SECOND_CONFIG = PLUGIN_ROOT / "config/projects/second-project.yaml"
 
 
 def test_diagnosis_flow_with_local_sdk_transport(tmp_path, diagnostic_endpoint):
-    result = _run_cli(input_text=json.dumps(_valid_incident()), plugin_data_dir=tmp_path)
+    result = _run_cli(
+        input_text=json.dumps(_valid_incident()), plugin_data_dir=tmp_path
+    )
 
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["diagnosis"]["cause_status"] == "CONFIRMED"
@@ -242,7 +258,9 @@ def diagnostic_endpoint(monkeypatch, tmp_path):
         def do_POST(self):
             length = int(self.headers["Content-Length"])
             body = json.loads(self.rfile.read(length))
-            requests.append(json.dumps({"path": self.path, "body": body}, sort_keys=True))
+            requests.append(
+                json.dumps({"path": self.path, "body": body}, sort_keys=True)
+            )
             if self.path.endswith("/count_tokens"):
                 response = {"input_tokens": 200}
             else:
@@ -303,7 +321,9 @@ def diagnostic_endpoint(monkeypatch, tmp_path):
         server.server_close()
         thread.join(timeout=CLEANUP_TIMEOUT_SECONDS)
         assert not thread.is_alive(), "The local endpoint did not stop"
-        assert all(not worker.is_alive() for worker in workers), "Endpoint workers did not stop"
+        assert all(not worker.is_alive() for worker in workers), (
+            "Endpoint workers did not stop"
+        )
         assert server.socket.fileno() == -1, "The local endpoint socket was not closed"
 
 
@@ -347,14 +367,22 @@ def test_process_tree_cleanup_after_timeout(tmp_path):
     assert time.monotonic() - started < 5 + 2 * CLEANUP_TIMEOUT_SECONDS + 5
     child_pid = pid_file.read_text()
     processes = subprocess.run(
-        ["tasklist", "/FI", f"PID eq {child_pid}", "/FO", "CSV", "/NH"],  # codespell:ignore fo
+        [
+            "tasklist",
+            "/FI",
+            f"PID eq {child_pid}",
+            "/FO",
+            "CSV",
+            "/NH",
+        ],  # codespell:ignore fo
         capture_output=True,
         text=True,
         check=True,
         timeout=CLEANUP_TIMEOUT_SECONDS,
     )
     assert all(
-        len(row) < 2 or row[1] != child_pid for row in csv.reader(processes.stdout.splitlines())
+        len(row) < 2 or row[1] != child_pid
+        for row in csv.reader(processes.stdout.splitlines())
     ), "A descendant Python process survived cleanup"
 
 
@@ -384,7 +412,9 @@ def _manifest_run_id(incident: dict, plugin_data_dir: Path) -> str:
     ("payload", "expected_code"),
     [(_valid_incident(), 0), ({"schema_version": "1.0"}, 2)],
 )
-def test_headless_cli_returns_documented_codes_without_prompts(payload, expected_code, tmp_path):
+def test_headless_cli_returns_documented_codes_without_prompts(
+    payload, expected_code, tmp_path
+):
     result = _run_cli(
         input_text=json.dumps(payload),
         plugin_data_dir=tmp_path,
@@ -438,7 +468,9 @@ def test_headless_cli_accepts_file_input(tmp_path):
     assert json.loads(result.stdout)["diagnosis"]["cause_status"] == "CONFIRMED"
 
 
-def test_headless_cli_returns_operational_code_when_manifest_cannot_be_persisted() -> None:
+def test_headless_cli_returns_operational_code_when_manifest_cannot_be_persisted() -> (
+    None
+):
     result = _run_cli(input_text=json.dumps(_valid_incident()))
 
     assert result.returncode == 1
@@ -497,7 +529,10 @@ def test_headless_cli_persists_completed_manifest_for_valid_run(tmp_path: Path) 
     assert len(manifest["evidence_hashes"]) == 2
     assert manifest["limitations"] == []
     result_document = json.loads(result.stdout)
-    assert result_document["eligibility_decision"]["decision"] == "ELIGIBLE_FOR_REMEDIATION"
+    assert (
+        result_document["eligibility_decision"]["decision"]
+        == "ELIGIBLE_FOR_REMEDIATION"
+    )
     for reference in ("diagnosis.json", "eligibility.json", "report.json", "report.md"):
         assert store.exists(manifest_run_id, reference)
 
@@ -541,7 +576,9 @@ def test_headless_cli_sanitizes_model_input_and_every_persisted_artifact(
     assert "[REDACTED_SECRET]" in transport_payload
 
     persisted = b"\n".join(
-        artifact.read_bytes() for artifact in (tmp_path / "runs").rglob("*") if artifact.is_file()
+        artifact.read_bytes()
+        for artifact in (tmp_path / "runs").rglob("*")
+        if artifact.is_file()
     ).decode("utf-8")
     assert email not in persisted
     assert all(secret not in persisted for secret in secrets)
@@ -577,7 +614,9 @@ def test_headless_cli_rejects_sensitive_incident_id_without_leaking(
         artifact for artifact in (tmp_path / "runs").rglob("*") if artifact.is_file()
     ]
     assert persisted_files
-    persisted = b"\n".join(artifact.read_bytes() for artifact in persisted_files).decode("utf-8")
+    persisted = b"\n".join(
+        artifact.read_bytes() for artifact in persisted_files
+    ).decode("utf-8")
     assert sensitive_incident_id not in persisted
     assert redaction_marker in persisted
 
@@ -595,10 +634,14 @@ def test_headless_cli_persists_failed_manifest_for_identifiable_invalid_run(
 
     assert result.returncode == 2
     store = LocalArtifactStore(plugin_data_dir=tmp_path)
-    manifest = load_run_manifest(run_id=_manifest_run_id(incident, tmp_path), artifact_store=store)
+    manifest = load_run_manifest(
+        run_id=_manifest_run_id(incident, tmp_path), artifact_store=store
+    )
     assert manifest["status"] == "FAILED"
     assert manifest["incident_id"] == incident["incident_id"]
-    assert manifest["limitations"] == ["Incident validation failed before evidence collection."]
+    assert manifest["limitations"] == [
+        "Incident validation failed before evidence collection."
+    ]
 
 
 @pytest.mark.parametrize(
@@ -652,7 +695,9 @@ def test_headless_cli_reuses_manifest_for_identical_retry(
     assert len(diagnostic_endpoint) == request_count
 
 
-def test_headless_cli_resumes_partial_write_without_repeating_model(tmp_path, monkeypatch, capsys):
+def test_headless_cli_resumes_partial_write_without_repeating_model(
+    tmp_path, monkeypatch, capsys
+):
     model_calls = 0
 
     def varying_diagnosis(_runner, payload, _budget, _prompt):
@@ -718,10 +763,14 @@ def test_headless_cli_resumes_partial_write_without_repeating_model(tmp_path, mo
     ):
         assert json.loads(store.get(run_id, reference)) == expected
     assert store.get(run_id, "report.md").decode("utf-8") == document["report_markdown"]
-    assert load_run_manifest(run_id=run_id, artifact_store=store)["status"] == "COMPLETED"
+    assert (
+        load_run_manifest(run_id=run_id, artifact_store=store)["status"] == "COMPLETED"
+    )
 
 
-def test_no_evidence_returns_unknown_report_without_model_call(tmp_path, diagnostic_endpoint):
+def test_no_evidence_returns_unknown_report_without_model_call(
+    tmp_path, diagnostic_endpoint
+):
     incident = _valid_incident()
     incident["project_profile"] = "dbt"
     incident["artifacts"] = []
@@ -755,7 +804,9 @@ def test_corrected_retry_gets_a_new_terminal_manifest(tmp_path: Path) -> None:
     assert _manifest_run_id(invalid, tmp_path) != _manifest_run_id(corrected, tmp_path)
 
     store = LocalArtifactStore(plugin_data_dir=tmp_path)
-    failed = load_run_manifest(run_id=_manifest_run_id(invalid, tmp_path), artifact_store=store)
+    failed = load_run_manifest(
+        run_id=_manifest_run_id(invalid, tmp_path), artifact_store=store
+    )
     completed = load_run_manifest(
         run_id=_manifest_run_id(corrected, tmp_path), artifact_store=store
     )

@@ -21,7 +21,9 @@ def test_all_passed_is_always_validated() -> None:
 
 
 @pytest.mark.parametrize("validation_status", ["HAS_FAILURES", "INCOMPLETE"])
-def test_failed_or_incomplete_validation_is_blocked_by_default(validation_status: str) -> None:
+def test_failed_or_incomplete_validation_is_blocked_by_default(
+    validation_status: str,
+) -> None:
     decision = decide_pr_publication(validation_status, allow_unvalidated_draft=False)
 
     assert decision.status == "BLOCKED"

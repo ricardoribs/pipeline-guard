@@ -88,7 +88,9 @@ def _collect_large_log(
     )[0]
 
 
-def test_session_retention_removes_original_and_index_after_collection(tmp_path: Path) -> None:
+def test_session_retention_removes_original_and_index_after_collection(
+    tmp_path: Path,
+) -> None:
     original = b"INFO filler that exceeds the test threshold\nERROR temporary failure\n"
     store = LocalArtifactStore(plugin_data_dir=tmp_path)
 
@@ -172,7 +174,9 @@ def test_large_log_index_has_overlapping_ranges_and_verified_hash() -> None:
     assert all(chunk["hash"].startswith("sha256:") for chunk in index["chunks"])
 
 
-def test_repeated_large_log_collection_is_deterministic_and_does_not_overwrite() -> None:
+def test_repeated_large_log_collection_is_deterministic_and_does_not_overwrite() -> (
+    None
+):
     original = b"INFO filler that exceeds the test threshold\nERROR stable failure\n"
     store = _MemoryArtifactStore()
 
@@ -207,7 +211,9 @@ def test_large_log_reference_collision_preserves_existing_content() -> None:
 def test_large_log_without_artifact_store_is_rejected() -> None:
     with pytest.raises(LargeLogProcessingError, match="requires an ArtifactStore"):
         collect_if_supported(
-            _LogProvider("INFO filler above threshold\nERROR unavailable artifact store\n"),
+            _LogProvider(
+                "INFO filler above threshold\nERROR unavailable artifact store\n"
+            ),
             EvidenceCapability.LOGS,
             {"incident_id": "incident-no-store"},
             large_log_policy=_TEST_POLICY,
@@ -231,7 +237,9 @@ def test_log_above_global_input_limit_is_rejected_before_storage() -> None:
 
 
 def test_large_log_policy_rejects_inline_limit_above_global_limit() -> None:
-    with pytest.raises(ValueError, match="max_inline_bytes cannot exceed max_input_bytes"):
+    with pytest.raises(
+        ValueError, match="max_inline_bytes cannot exceed max_input_bytes"
+    ):
         replace(_TEST_POLICY, max_input_bytes=39)
 
 

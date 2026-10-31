@@ -20,11 +20,17 @@ from typing import Any
 
 try:  # Support both direct script execution and package-style imports.
     from .artifact_store import LocalArtifactStore
-    from .git_executor import GitExecutorValidationError, validate_remediation_git_configuration
+    from .git_executor import (
+        GitExecutorValidationError,
+        validate_remediation_git_configuration,
+    )
     from .validate_config import ConfigValidationError, validate_config
 except ImportError:  # pragma: no cover - direct script execution
     from artifact_store import LocalArtifactStore
-    from git_executor import GitExecutorValidationError, validate_remediation_git_configuration
+    from git_executor import (
+        GitExecutorValidationError,
+        validate_remediation_git_configuration,
+    )
     from validate_config import ConfigValidationError, validate_config
 
 _MINIMUM_CLAUDE_VERSION = (2, 1, 295)
@@ -91,7 +97,9 @@ def run_preflight(
 ) -> UnattendedPreflightResult:
     """Validate every unattended prerequisite without creating a repair workspace."""
 
-    host_environment = _normalized_environment(os.environ if environment is None else environment)
+    host_environment = _normalized_environment(
+        os.environ if environment is None else environment
+    )
     config = _validated_unattended_config(Path(config_path))
     unattended = config["unattended"]
     remediation_enabled = unattended["remediation_enabled"] is True
@@ -218,7 +226,9 @@ def _claude_version(
     command_runner: Callable[..., subprocess.CompletedProcess[str]],
 ) -> tuple[int, int, int]:
     version_environment = {
-        name: value for name, value in environment.items() if name in _VERSION_ENVIRONMENT
+        name: value
+        for name, value in environment.items()
+        if name in _VERSION_ENVIRONMENT
     }
     try:
         completed = command_runner(
@@ -266,7 +276,9 @@ def _claude_version(
 
 def _model_prerequisites(environment: Mapping[str, str], *, model: str | None) -> str:
     _required_environment(environment, "ANTHROPIC_BASE_URL")
-    if not environment.get("ANTHROPIC_AUTH_TOKEN") and not environment.get("ANTHROPIC_API_KEY"):
+    if not environment.get("ANTHROPIC_AUTH_TOKEN") and not environment.get(
+        "ANTHROPIC_API_KEY"
+    ):
         raise UnattendedPreflightError(
             "model credentials",
             "ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY must be present",

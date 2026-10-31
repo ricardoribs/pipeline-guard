@@ -65,7 +65,9 @@ def _test_result(status: str, *, run_id: str = "run-42") -> ValidationExecutionR
         "HAS_FAILURES": [CommandResult("test", "FAILED", 1.0, None)],
         "INCOMPLETE": [],
     }[status]
-    return ValidationExecutionResult(run_id=run_id, results=results, validation_status=status)
+    return ValidationExecutionResult(
+        run_id=run_id, results=results, validation_status=status
+    )
 
 
 def _pushed_branch(*, branch: str = "pipeline-guard/INC-42") -> PushedIncidentBranch:
@@ -122,7 +124,10 @@ def test_allowed_policy_invokes_draft_pr_publisher_once(
     )
 
     assert result.decision.status == expected_status
-    assert result.draft_pr == {"id": "42", "url": "https://example.invalid/pull-requests/42"}
+    assert result.draft_pr == {
+        "id": "42",
+        "url": "https://example.invalid/pull-requests/42",
+    }
     assert publisher.calls == [(_request(), "INC-42", "run-42")]
 
 
@@ -185,10 +190,15 @@ def test_production_entry_derives_a_blocking_status_from_executor_result(
         def run(self) -> ValidationExecutionResult:
             return _test_result("HAS_FAILURES")
 
-    def verified_branch(workspace_path, *, request, repository_config, expected_commit=None):
+    def verified_branch(
+        workspace_path, *, request, repository_config, expected_commit=None
+    ):
         assert workspace_path == tmp_path
         assert request == _request()
-        assert repository_config["url"] == "https://bitbucket.org/example-org/delivery-dashboard.git"
+        assert (
+            repository_config["url"]
+            == "https://bitbucket.org/example-org/delivery-dashboard.git"
+        )
         assert expected_commit in (None, "a" * 40)
         calls.append(expected_commit)
         return _pushed_branch()
@@ -197,7 +207,9 @@ def test_production_entry_derives_a_blocking_status_from_executor_result(
         raise AssertionError("BLOCKED must not invoke the repair PR publisher")
 
     monkeypatch.setattr(pr_publication, "TestExecutor", FailingExecutor)
-    monkeypatch.setattr(pr_publication, "_verify_pushed_incident_branch", verified_branch)
+    monkeypatch.setattr(
+        pr_publication, "_verify_pushed_incident_branch", verified_branch
+    )
 
     result = publish_from_config(
         {
@@ -249,7 +261,9 @@ def test_production_entry_publishes_only_after_workspace_verification_and_execut
         def run(self) -> ValidationExecutionResult:
             return _test_result("ALL_PASSED")
 
-    def verified_branch(_workspace_path, *, request, repository_config, expected_commit=None):
+    def verified_branch(
+        _workspace_path, *, request, repository_config, expected_commit=None
+    ):
         assert request == _request()
         assert repository_config["push_credential_ref"] == "env:PIPELINE_GUARD_TOKEN"
         verification_calls.append(expected_commit)
@@ -265,7 +279,9 @@ def test_production_entry_publishes_only_after_workspace_verification_and_execut
         }
 
     monkeypatch.setattr(pr_publication, "TestExecutor", PassingExecutor)
-    monkeypatch.setattr(pr_publication, "_verify_pushed_incident_branch", verified_branch)
+    monkeypatch.setattr(
+        pr_publication, "_verify_pushed_incident_branch", verified_branch
+    )
 
     result = publish_from_config(
         {
@@ -295,7 +311,10 @@ def test_production_entry_publishes_only_after_workspace_verification_and_execut
     assert verification_calls == [None, "a" * 40]
     assert result.decision.status == "VALIDATED"
     assert result.test_result == _test_result("ALL_PASSED")
-    assert result.draft_pr == {"id": "42", "url": "https://example.invalid/pull-requests/42"}
+    assert result.draft_pr == {
+        "id": "42",
+        "url": "https://example.invalid/pull-requests/42",
+    }
     assert provider_calls == [
         {
             "provider": "bitbucket",
@@ -340,7 +359,9 @@ def test_production_entry_revalidates_the_pushed_workspace_before_publication(
             "status",
             "--porcelain",
             "--untracked-files=all",
-            environment=pr_publication.isolated_push_environment("non-secret-test-value"),
+            environment=pr_publication.isolated_push_environment(
+                "non-secret-test-value"
+            ),
             action="inspect workspace changes",
         ).strip()
         == ""
@@ -385,7 +406,10 @@ def test_production_entry_revalidates_the_pushed_workspace_before_publication(
     assert result.decision.status == "VALIDATED"
     assert result.test_result is not None
     assert result.test_result.validation_status == "ALL_PASSED"
-    assert result.draft_pr == {"id": "42", "url": "https://example.invalid/pull-requests/42"}
+    assert result.draft_pr == {
+        "id": "42",
+        "url": "https://example.invalid/pull-requests/42",
+    }
     assert publisher.calls == [(_request(), "INC-42", "run-42")]
 
 
@@ -407,11 +431,18 @@ def test_workspace_verification_uses_an_isolated_credential_for_ls_remote(
             return ""
         if arguments == ("rev-parse", "--verify", "HEAD^{commit}"):
             return f"{commit}\n"
-        if arguments == ("ls-remote", "--heads", "origin", "refs/heads/pipeline-guard/INC-42"):
+        if arguments == (
+            "ls-remote",
+            "--heads",
+            "origin",
+            "refs/heads/pipeline-guard/INC-42",
+        ):
             return f"{commit}\trefs/heads/pipeline-guard/INC-42\n"
         raise AssertionError(f"unexpected Git command: {arguments!r}")
 
-    monkeypatch.setattr(pr_publication, "resolve_push_credential", lambda _reference: "token")
+    monkeypatch.setattr(
+        pr_publication, "resolve_push_credential", lambda _reference: "token"
+    )
     monkeypatch.setattr(pr_publication, "_workspace_git_text", git_text)
 
     verified = pr_publication._verify_pushed_incident_branch(
@@ -467,7 +498,11 @@ def test_factory_selects_standalone_publisher_from_repository_config() -> None:
             "https://bitbucket.org/example-org/delivery.git",
             ("example-org", "delivery"),
         ),
-        ("github", "https://github.com/example-org/delivery.git", ("example-org", "delivery")),
+        (
+            "github",
+            "https://github.com/example-org/delivery.git",
+            ("example-org", "delivery"),
+        ),
     ],
 )
 def test_repository_identity_preserves_provider_owner(
@@ -479,4 +514,6 @@ def test_repository_identity_preserves_provider_owner(
 @pytest.mark.parametrize("provider", ["gitlab", "azure-devops"])
 def test_repository_identity_rejects_unsupported_provider(provider: str) -> None:
     with pytest.raises(PRPublicationError, match="only bitbucket and github"):
-        _repository_identity_from_url("https://example.test/owner/repository.git", provider)
+        _repository_identity_from_url(
+            "https://example.test/owner/repository.git", provider
+        )

@@ -87,7 +87,10 @@ def _dbt_specific_values(failed_nodes: Iterable[Mapping[str, object]]) -> set[st
 def test_dbt_diagnosis_keeps_adapter_details_out_of_core(sample_incident: dict) -> None:
     reference_input = _reference_json("input")
     diagnosis = _reference_json("output")
-    incident = {**sample_incident, "incident_id": reference_input["incident"]["incident_id"]}
+    incident = {
+        **sample_incident,
+        "incident_id": reference_input["incident"]["incident_id"],
+    }
     adapter_output = DbtAdapter(artifacts_dir=DBT_FIXTURE_DIR).run(incident)
 
     assert reference_input["evidences"] == adapter_output["evidences"]
@@ -115,6 +118,8 @@ def test_dbt_diagnosis_keeps_adapter_details_out_of_core(sample_incident: dict) 
     assert DBT_DETAIL_KEYS.isdisjoint(_nested_keys(diagnosis_core))
 
     serialized_core = json.dumps(diagnosis_core, ensure_ascii=False, sort_keys=True)
-    fixture_payloads = [json.loads(evidence["content"]) for evidence in adapter_output["evidences"]]
+    fixture_payloads = [
+        json.loads(evidence["content"]) for evidence in adapter_output["evidences"]
+    ]
     for detail_value in _dbt_specific_values(fixture_payloads):
         assert json.dumps(detail_value, ensure_ascii=False) not in serialized_core

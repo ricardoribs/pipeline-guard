@@ -17,8 +17,12 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 _PLUGIN_ROOT = Path(__file__).resolve().parents[1]
-_INCIDENT_SCHEMA_PATH = _PLUGIN_ROOT / "contracts" / "schema" / "incident_input_v1.schema.json"
-_DIAGNOSIS_SCHEMA_PATH = _PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+_INCIDENT_SCHEMA_PATH = (
+    _PLUGIN_ROOT / "contracts" / "schema" / "incident_input_v1.schema.json"
+)
+_DIAGNOSIS_SCHEMA_PATH = (
+    _PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+)
 
 
 class PRRequestBuilderError(ValueError):
@@ -99,7 +103,9 @@ def build_pr_request(
 def _check_test_result(test_result: object) -> None:
     for attr in ("validation_status", "results", "run_id"):
         if not hasattr(test_result, attr):
-            raise PRRequestBuilderError(f"test_result is missing required attribute {attr!r}")
+            raise PRRequestBuilderError(
+                f"test_result is missing required attribute {attr!r}"
+            )
 
 
 def _merge_limitations(from_diagnosis: list[str], from_arg: list[str]) -> list[str]:
@@ -142,7 +148,9 @@ def _build_body(
     return "\n".join(lines) + "\n"
 
 
-def _section_incident(lines: list[str], incident: dict[str, Any], *, commit: str) -> None:
+def _section_incident(
+    lines: list[str], incident: dict[str, Any], *, commit: str
+) -> None:
     def _field(key: str) -> str:
         v = incident.get(key)
         return _text(v) if v else "unavailable"
@@ -179,7 +187,9 @@ def _section_evidence(lines: list[str], diagnosis: dict[str, Any]) -> None:
     lines += ["", "## Evidence", ""]
     citations = diagnosis.get("evidence_citations") or []
     if citations:
-        lines += [f"- {_text(c['evidence_id'])}: {_text(c['claim'])}" for c in citations]
+        lines += [
+            f"- {_text(c['evidence_id'])}: {_text(c['claim'])}" for c in citations
+        ]
     else:
         lines.append("No evidence citations.")
 
@@ -194,7 +204,9 @@ def _section_files(lines: list[str], files_changed: list[dict[str, Any]]) -> Non
             "| --- | --- | --- |",
         ]
         for f in files_changed:
-            lines.append(f"| {_text(str(f['path']))} | {f['lines_added']} | {f['lines_removed']} |")
+            lines.append(
+                f"| {_text(str(f['path']))} | {f['lines_added']} | {f['lines_removed']} |"
+            )
 
 
 def _section_tests(lines: list[str], test_result: object) -> None:
@@ -256,7 +268,9 @@ def _validated_mapping(
         raise PRRequestBuilderError(f"{label} must be an object")
     document = dict(value)
     validator = Draft202012Validator(_load_schema(schema_path))
-    errors = sorted(validator.iter_errors(document), key=lambda e: list(e.absolute_path))
+    errors = sorted(
+        validator.iter_errors(document), key=lambda e: list(e.absolute_path)
+    )
     if errors:
         first = errors[0]
         field = ".".join(str(p) for p in first.absolute_path) or "<root>"

@@ -18,7 +18,9 @@ def _load_validator_module():
             "pipeline_guard_incident_validator", INCIDENT_VALIDATOR_PATH
         )
         if spec is None or spec.loader is None:
-            raise RuntimeError(f"could not load incident validator from {INCIDENT_VALIDATOR_PATH}")
+            raise RuntimeError(
+                f"could not load incident validator from {INCIDENT_VALIDATOR_PATH}"
+            )
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
@@ -42,7 +44,9 @@ def _valid_incident() -> dict:
         "occurred_at": "2026-10-01T12:00:00Z",
         "error_summary": "Compilation failed",
         "project_profile": "generic",
-        "artifacts": [{"type": "log", "uri": "artifact://logs/build-1", "hash": "sha256:abc123"}],
+        "artifacts": [
+            {"type": "log", "uri": "artifact://logs/build-1", "hash": "sha256:abc123"}
+        ],
     }
 
 
@@ -92,7 +96,9 @@ def test_contract_rejects_v11_blocks_in_v10_documents(v11_block):
 
 def test_contract_rejects_repository_url_with_embedded_credential():
     incident = _valid_unattended_incident()
-    incident["code_version"]["repository_url"] = "https://token@example.com/example-org/repo.git"
+    incident["code_version"]["repository_url"] = (
+        "https://token@example.com/example-org/repo.git"
+    )
 
     with pytest.raises(validator.IncidentValidationError, match="repository_url"):
         validator.validate_incident_input(incident)
@@ -104,7 +110,10 @@ def test_contract_rejects_repository_url_with_embedded_credential():
         ("repository_url", "https://token@example.com/example-org/repo.git"),
         ("repository_url", "https://bitbucket.org/example-org/repo.git?token=signed"),
         ("run_url", "https://token@example.com/pipelines/789"),
-        ("run_url", "https://bitbucket.org/example-org/repo/pipelines/789?token=signed"),
+        (
+            "run_url",
+            "https://bitbucket.org/example-org/repo/pipelines/789?token=signed",
+        ),
     ],
 )
 def test_contract_rejects_credential_or_query_in_urls(field, value):
@@ -145,7 +154,9 @@ def test_unattended_contract_accepts_missing_code_version_input(missing_field):
 def test_contract_requires_fields_and_rejects_unmarked_unavailable_values():
     incident = _valid_incident()
     del incident["failed_step"]
-    with pytest.raises(validator.IncidentValidationError, match=r"failed_step.*required"):
+    with pytest.raises(
+        validator.IncidentValidationError, match=r"failed_step.*required"
+    ):
         validator.validate_incident_input(incident)
 
     incident = _valid_incident()
@@ -212,7 +223,11 @@ def test_contract_reuses_evidence_for_correlated_retry(tmp_path):
 
     def collect_evidence(_incident):
         calls.append("collected")
-        return {"evidence_id": "evidence-1", "uri": "artifact://evidence/1", "hash": "abc"}
+        return {
+            "evidence_id": "evidence-1",
+            "uri": "artifact://evidence/1",
+            "hash": "abc",
+        }
 
     first = validator.validate_or_reuse_incident(
         incident, artifact_store=store, collect_evidence=collect_evidence

@@ -81,7 +81,8 @@ class _PolicyError(ValueError):
 
 def _is_remediation_agent(agent_type: object) -> bool:
     return (
-        isinstance(agent_type, str) and agent_type.rsplit(":", maxsplit=1)[-1] == _REMEDIATION_AGENT
+        isinstance(agent_type, str)
+        and agent_type.rsplit(":", maxsplit=1)[-1] == _REMEDIATION_AGENT
     )
 
 
@@ -94,15 +95,21 @@ def _string_list(value: object, field: str) -> list[str]:
 def _normalize_pattern(pattern: str) -> str:
     normalized = pattern.replace("\\", "/")
     if not normalized or normalized != normalized.strip():
-        raise _PolicyError("safety path patterns must be non-empty and have no surrounding spaces")
+        raise _PolicyError(
+            "safety path patterns must be non-empty and have no surrounding spaces"
+        )
     if normalized.startswith("/") or (len(normalized) > 1 and normalized[1] == ":"):
         raise _PolicyError("safety path patterns must be workspace-relative")
 
     parts = normalized.split("/")
     if ".." in parts:
-        raise _PolicyError("safety path patterns must not contain parent-directory segments")
+        raise _PolicyError(
+            "safety path patterns must not contain parent-directory segments"
+        )
     if any(part.endswith((".", " ")) for part in parts if part not in {"", "."}):
-        raise _PolicyError("safety path patterns must not end a component with a dot or space")
+        raise _PolicyError(
+            "safety path patterns must not end a component with a dot or space"
+        )
 
     return "/".join(part for part in parts if part not in {"", "."})
 
@@ -127,18 +134,26 @@ def _load_safety(config_path: Path) -> tuple[list[str], list[str], list[str]]:
         _normalize_pattern(pattern)
         for pattern in _string_list(safety.get("editable_paths", []), "editable_paths")
     ]
-    editable_extensions = _string_list(safety.get("editable_extensions", []), "editable_extensions")
+    editable_extensions = _string_list(
+        safety.get("editable_extensions", []), "editable_extensions"
+    )
     sensitive_paths = [
         _normalize_pattern(pattern)
-        for pattern in _string_list(safety.get("sensitive_paths", []), "sensitive_paths")
+        for pattern in _string_list(
+            safety.get("sensitive_paths", []), "sensitive_paths"
+        )
     ]
 
     return editable_paths, editable_extensions, sensitive_paths
 
 
 def _matches_glob(path: str, pattern: str) -> bool:
-    path_parts = tuple(part.casefold() for part in path.split("/") if part not in {"", "."})
-    pattern_parts = tuple(part.casefold() for part in pattern.split("/") if part not in {"", "."})
+    path_parts = tuple(
+        part.casefold() for part in path.split("/") if part not in {"", "."}
+    )
+    pattern_parts = tuple(
+        part.casefold() for part in pattern.split("/") if part not in {"", "."}
+    )
 
     @cache
     def matches(path_index: int, pattern_index: int) -> bool:
@@ -200,7 +215,9 @@ def _relative_target(tool_path: object, workspace_root: Path) -> tuple[str, Path
         resolved_path = lexical_path.resolve(strict=False)
         resolved_relative = resolved_path.relative_to(workspace_root)
     except (OSError, RuntimeError, ValueError) as error:
-        raise _PolicyError("target cannot be resolved inside the isolated workspace") from error
+        raise _PolicyError(
+            "target cannot be resolved inside the isolated workspace"
+        ) from error
 
     relative_path = resolved_relative.as_posix()
     return ("" if relative_path == "." else relative_path), resolved_path
@@ -224,16 +241,22 @@ def _approved_read_paths(workspace_root: Path) -> frozenset[str]:
         raise _PolicyError("approved remediation read paths must be JSON") from error
 
     if not isinstance(supplied_paths, list) or not supplied_paths:
-        raise _PolicyError("approved remediation read paths must be a non-empty JSON list")
+        raise _PolicyError(
+            "approved remediation read paths must be a non-empty JSON list"
+        )
 
     approved_paths: set[str] = set()
     for supplied_path in supplied_paths:
         if not isinstance(supplied_path, str) or any(
             character in supplied_path for character in "*?["
         ):
-            raise _PolicyError("approved remediation read paths must be exact file paths")
+            raise _PolicyError(
+                "approved remediation read paths must be exact file paths"
+            )
         if Path(supplied_path).is_absolute():
-            raise _PolicyError("approved remediation read paths must be workspace-relative")
+            raise _PolicyError(
+                "approved remediation read paths must be workspace-relative"
+            )
         relative_path, _ = _relative_target(supplied_path, workspace_root)
         if not relative_path:
             raise _PolicyError("approved remediation read paths must name files")
@@ -271,7 +294,9 @@ def enforce_file_event(event: object) -> dict[str, Any] | None:
     cwd = event.get("cwd", os.getcwd())
     if not isinstance(cwd, str) or not cwd:
         action = "read" if tool_name in _READ_TOOLS else "write"
-        return _deny(f"Remediation {action} blocked: isolated workspace is unavailable.")
+        return _deny(
+            f"Remediation {action} blocked: isolated workspace is unavailable."
+        )
 
     try:
         workspace_root = Path(cwd).resolve(strict=True)
@@ -279,11 +304,15 @@ def enforce_file_event(event: object) -> dict[str, Any] | None:
             raise _PolicyError("isolated workspace is not a directory")
         config_path = workspace_root / _CONFIG_RELATIVE_PATH
         config_path.resolve(strict=False).relative_to(workspace_root)
-        relative_path, resolved_path = _relative_target(tool_input.get("file_path"), workspace_root)
+        relative_path, resolved_path = _relative_target(
+            tool_input.get("file_path"), workspace_root
+        )
         editable_paths, editable_extensions, sensitive_paths = _load_safety(config_path)
     except (OSError, RuntimeError, ValueError) as error:
         action = "read" if tool_name in _READ_TOOLS else "write"
-        return _deny(f"Remediation {action} blocked: policy could not be verified ({error}).")
+        return _deny(
+            f"Remediation {action} blocked: policy could not be verified ({error})."
+        )
 
     if tool_name in _READ_TOOLS:
         try:
@@ -293,7 +322,9 @@ def enforce_file_event(event: object) -> dict[str, Any] | None:
             return _deny(f"{reason} ({error}).")
         read_sensitive_paths = (*sensitive_paths, *_READ_SENSITIVE_PATTERNS)
         if _matches_any_sensitive_path(relative_path, read_sensitive_paths):
-            return _deny("Remediation read blocked: target matches a protected sensitive path.")
+            return _deny(
+                "Remediation read blocked: target matches a protected sensitive path."
+            )
         if relative_path.casefold() not in approved_read_paths:
             return _deny(
                 "Remediation read blocked: target is outside the caller-approved read scope."
@@ -301,11 +332,17 @@ def enforce_file_event(event: object) -> dict[str, Any] | None:
         return None
 
     if relative_path.casefold() == _CONFIG_RELATIVE_PATH.as_posix().casefold():
-        return _deny("Remediation write blocked: the project safety configuration is protected.")
+        return _deny(
+            "Remediation write blocked: the project safety configuration is protected."
+        )
     if _matches_any_sensitive_path(relative_path, sensitive_paths):
-        return _deny("Remediation write blocked: target matches safety.sensitive_paths.")
+        return _deny(
+            "Remediation write blocked: target matches safety.sensitive_paths."
+        )
     if not _matches_any(relative_path, editable_paths):
-        return _deny("Remediation write blocked: target is outside safety.editable_paths.")
+        return _deny(
+            "Remediation write blocked: target is outside safety.editable_paths."
+        )
     if resolved_path.suffix.casefold() not in {
         extension.casefold() for extension in editable_extensions
     }:

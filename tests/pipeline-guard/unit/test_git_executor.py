@@ -59,13 +59,15 @@ def test_commit_and_push_uses_only_the_accepted_patch(tmp_path: Path) -> None:
         assert result.branch == "pipeline-guard/INC-GIT-001"
         assert result.patch_hash == validation["patch_hash"]
         assert _git(workspace.path, "rev-parse", "HEAD").stdout.strip() == result.commit
-        assert _git(repository, "rev-parse", f"refs/heads/{result.branch}").stdout.strip() == (
-            result.commit
-        )
+        assert _git(
+            repository, "rev-parse", f"refs/heads/{result.branch}"
+        ).stdout.strip() == (result.commit)
         assert _git(repository, "rev-parse", "main").stdout.strip() == base_commit
 
 
-def test_rejects_an_unaccepted_patch_before_staging_or_committing(tmp_path: Path) -> None:
+def test_rejects_an_unaccepted_patch_before_staging_or_committing(
+    tmp_path: Path,
+) -> None:
     repository, config_path, base_commit = _repository_with_config(tmp_path)
 
     with prepare_workspace(
@@ -79,7 +81,9 @@ def test_rejects_an_unaccepted_patch_before_staging_or_committing(tmp_path: Path
         validation = _validated_patch(workspace, config_path)
         validation["accepted"] = False
 
-        with pytest.raises(GitExecutorValidationError, match="accepted patch validation"):
+        with pytest.raises(
+            GitExecutorValidationError, match="accepted patch validation"
+        ):
             commit_and_push(workspace, validation, provider="bitbucket")
 
         assert _git(workspace.path, "rev-parse", "HEAD").stdout.strip() == base_commit
@@ -137,7 +141,9 @@ def test_rejects_a_workspace_that_changed_after_validation(tmp_path: Path) -> No
         assert _git(workspace.path, "diff", "--cached", "--quiet").returncode == 0
 
 
-def test_rejects_staged_or_untracked_content_not_in_the_validated_patch(tmp_path: Path) -> None:
+def test_rejects_staged_or_untracked_content_not_in_the_validated_patch(
+    tmp_path: Path,
+) -> None:
     _, config_path, base_commit = _repository_with_config(tmp_path)
 
     with prepare_workspace(
@@ -149,7 +155,9 @@ def test_rejects_staged_or_untracked_content_not_in_the_validated_patch(tmp_path
         changed_file = workspace.path / "models" / "orders.sql"
         changed_file.write_text("select 2 as order_id\n", encoding="utf-8")
         validation = _validated_patch(workspace, config_path)
-        (workspace.path / "unexpected.txt").write_text("not validated\n", encoding="utf-8")
+        (workspace.path / "unexpected.txt").write_text(
+            "not validated\n", encoding="utf-8"
+        )
 
         with pytest.raises(GitExecutorValidationError, match="only tracked changes"):
             commit_and_push(workspace, validation, provider="bitbucket")
@@ -253,7 +261,9 @@ def test_retry_after_push_skips_a_duplicate_push(
         def unexpected_duplicate_push(*_args: object) -> None:
             pytest.fail("a successful push must not be attempted again")
 
-        monkeypatch.setattr(git_executor, "_push_incident_branch", unexpected_duplicate_push)
+        monkeypatch.setattr(
+            git_executor, "_push_incident_branch", unexpected_duplicate_push
+        )
         retried = commit_and_push(workspace, validation, provider="bitbucket")
 
         assert retried == first
@@ -313,7 +323,9 @@ def test_build_remediation_result_returns_the_schema_conformant_final_result(
     assert result["tests"][0]["log_reference"] == "dbt-build-log"
 
 
-def test_build_remediation_result_rejects_inconsistent_policy_status(tmp_path: Path) -> None:
+def test_build_remediation_result_rejects_inconsistent_policy_status(
+    tmp_path: Path,
+) -> None:
     _, config_path, base_commit = _repository_with_config(tmp_path)
     test_result = ValidationExecutionResult(
         run_id="run-failed",
@@ -344,7 +356,9 @@ def test_build_remediation_result_rejects_inconsistent_policy_status(tmp_path: P
             provider="bitbucket",
         )
 
-        with pytest.raises(RemediationResultValidationError, match="VALIDATED requires"):
+        with pytest.raises(
+            RemediationResultValidationError, match="VALIDATED requires"
+        ):
             build_remediation_result(
                 incident_id="INC-GIT-RESULT-INVALID",
                 workspace=workspace,
@@ -408,7 +422,9 @@ def test_build_remediation_result_records_a_blocked_validation_without_a_draft_p
     assert "pr_validation_status" not in result
 
 
-def test_build_remediation_result_rejects_an_inconsistent_test_aggregate(tmp_path: Path) -> None:
+def test_build_remediation_result_rejects_an_inconsistent_test_aggregate(
+    tmp_path: Path,
+) -> None:
     _, config_path, base_commit = _repository_with_config(tmp_path)
 
     with prepare_workspace(
@@ -458,19 +474,25 @@ def _configure_author(repository: Path) -> None:
 
 
 def _commit_count(repository: Path, base_commit: str, commit: str) -> str:
-    return _git(repository, "rev-list", "--count", f"{base_commit}..{commit}").stdout.strip()
+    return _git(
+        repository, "rev-list", "--count", f"{base_commit}..{commit}"
+    ).stdout.strip()
 
 
 def _remote_commit(repository: Path, branch: str | None) -> str | None:
     assert branch is not None
-    result = _git(repository, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}")
+    result = _git(
+        repository, "for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}"
+    )
     assert result.returncode == 0
     return result.stdout.strip() or None
 
 
 def _validated_patch(workspace, config_path: Path) -> dict:
     config = _load_config(config_path)
-    patch = _git_bytes(workspace.path, "diff", "--binary", "--no-ext-diff", "HEAD", "--")
+    patch = _git_bytes(
+        workspace.path, "diff", "--binary", "--no-ext-diff", "HEAD", "--"
+    )
     return validate_patch(
         [
             {
@@ -621,8 +643,12 @@ def test_validate_remediation_git_configuration_rejects_url_credentials() -> Non
         validate_remediation_git_configuration(config)
 
 
-@pytest.mark.parametrize("url", ["http://example.com/org/repo.git", "git@example.com:org/repo.git"])
-def test_validate_remediation_git_configuration_rejects_non_https_push_url(url: str) -> None:
+@pytest.mark.parametrize(
+    "url", ["http://example.com/org/repo.git", "git@example.com:org/repo.git"]
+)
+def test_validate_remediation_git_configuration_rejects_non_https_push_url(
+    url: str,
+) -> None:
     config = {
         "repository": {
             "url": url,
@@ -663,14 +689,21 @@ def test_resolve_push_credential_resolves_env_and_secret() -> None:
         "MY_TOKEN": "token-12345",
         "SECRET_PIPELINE_TOKEN": "secret-abcde",
     }
-    assert resolve_push_credential("env:MY_TOKEN", host_environment=env) == "token-12345"
+    assert (
+        resolve_push_credential("env:MY_TOKEN", host_environment=env) == "token-12345"
+    )
     assert resolve_push_credential("${MY_TOKEN}", host_environment=env) == "token-12345"
-    assert resolve_push_credential("secret:pipeline/token", host_environment=env) == "secret-abcde"
+    assert (
+        resolve_push_credential("secret:pipeline/token", host_environment=env)
+        == "secret-abcde"
+    )
 
     with pytest.raises(GitExecutorError, match="not found"):
         resolve_push_credential("env:MISSING_TOKEN", host_environment=env)
 
-    with pytest.raises(GitExecutorValidationError, match="literal tokens are forbidden"):
+    with pytest.raises(
+        GitExecutorValidationError, match="literal tokens are forbidden"
+    ):
         resolve_push_credential("ghp_literal_token", host_environment=env)
 
 
@@ -734,7 +767,9 @@ def test_push_incident_branch_uses_strict_refspec_and_isolated_environment(
     assert call["environment"]["GIT_CONFIG_NOSYSTEM"] == "1"
     assert call["environment"]["GIT_CONFIG_COUNT"] == "1"
     assert call["environment"]["GIT_CONFIG_KEY_0"] == "http.extraHeader"
-    assert call["environment"]["GIT_CONFIG_VALUE_0"] == "Authorization: Basic " + b64encode(
+    assert call["environment"][
+        "GIT_CONFIG_VALUE_0"
+    ] == "Authorization: Basic " + b64encode(
         b"x-token-auth:resolved-remediation-token"
     ).decode("ascii")
 
@@ -774,7 +809,9 @@ def test_remote_branch_check_uses_isolated_credential_for_https_origin(
         assert call["environment"]["GIT_CONFIG_NOSYSTEM"] == "1"
         assert call["environment"]["GIT_CONFIG_COUNT"] == "1"
         assert call["environment"]["GIT_CONFIG_KEY_0"] == "http.extraHeader"
-        assert call["environment"]["GIT_CONFIG_VALUE_0"] == "Authorization: Basic " + b64encode(
+        assert call["environment"][
+            "GIT_CONFIG_VALUE_0"
+        ] == "Authorization: Basic " + b64encode(
             b"x-token-auth:resolved-remediation-token"
         ).decode("ascii")
 
@@ -793,7 +830,9 @@ def test_push_rechecks_url_before_exposing_credential_to_git(tmp_path: Path) -> 
         ClonedWorkspace(inputs, parent_dir=tmp_path) as workspace,
         pytest.raises(GitExecutorValidationError, match="must use HTTPS"),
     ):
-        git_executor._push_incident_branch(workspace, "pipeline-guard/INC-42", "secret-token")
+        git_executor._push_incident_branch(
+            workspace, "pipeline-guard/INC-42", "secret-token"
+        )
 
 
 def test_isolated_push_environment_removes_every_listed_credential(
@@ -826,7 +865,10 @@ def test_isolated_push_environment_uses_bearer_for_other_providers() -> None:
         provider="github",
     )
 
-    assert environment["GIT_CONFIG_VALUE_0"] == "Authorization: Bearer resolved-remediation-token"
+    assert (
+        environment["GIT_CONFIG_VALUE_0"]
+        == "Authorization: Bearer resolved-remediation-token"
+    )
 
 
 def test_empty_hooks_directory_is_private_per_commit_and_ignores_preplanted_path(

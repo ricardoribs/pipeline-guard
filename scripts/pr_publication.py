@@ -104,7 +104,9 @@ class PipelineGuardDraftPRPublisher:
         try:
             response = self._request_publisher(payload)
         except (OSError, ValueError) as error:
-            raise PRPublicationError("Pipeline Guard draft-PR publication failed") from error
+            raise PRPublicationError(
+                "Pipeline Guard draft-PR publication failed"
+            ) from error
         return _normalized_repair_reference(response)
 
 
@@ -160,7 +162,9 @@ def publish_draft_pr(
     normalized_run_id = _required_text(run_id, "run_id")
     if not isinstance(request, PRRequest) or request.draft is not True:
         raise PRPublicationError("request must be a neutral draft PRRequest")
-    normalized_test_result = _validated_test_result(test_result, run_id=normalized_run_id)
+    normalized_test_result = _validated_test_result(
+        test_result, run_id=normalized_run_id
+    )
     _validated_pushed_branch(pushed_branch, request=request)
 
     decision = decide_pr_publication(
@@ -174,7 +178,9 @@ def publish_draft_pr(
             test_result=normalized_test_result,
         )
     if publisher is None:
-        raise PRPublicationError("a draft-PR publisher is required after policy approval")
+        raise PRPublicationError(
+            "a draft-PR publisher is required after policy approval"
+        )
 
     reference = publisher.publish_or_reuse_draft(
         request,
@@ -229,7 +235,9 @@ def publish_from_config(
             cwd=workspace_path,
         ).run()
     except (OSError, RuntimeError, ValueError) as error:
-        raise PRPublicationError("configured validation could not be executed") from error
+        raise PRPublicationError(
+            "configured validation could not be executed"
+        ) from error
     _verify_pushed_incident_branch(
         workspace_path,
         request=request,
@@ -241,7 +249,9 @@ def publish_from_config(
         allow_unvalidated_draft=remediation.get("allow_unvalidated_draft", False),
     )
     if decision.status == "BLOCKED":
-        return DraftPRPublication(decision=decision, draft_pr=None, test_result=test_result)
+        return DraftPRPublication(
+            decision=decision, draft_pr=None, test_result=test_result
+        )
     publisher = pipeline_guard_publisher_from_repository(
         repository,
         request_publisher=request_publisher,
@@ -260,7 +270,9 @@ def publish_from_config(
 def _workspace_path(value: object) -> Path:
     path = Path(_required_text(value, "workspace_path")).expanduser()
     if not path.is_dir():
-        raise PRPublicationError("workspace_path must identify an existing workspace directory")
+        raise PRPublicationError(
+            "workspace_path must identify an existing workspace directory"
+        )
     return path.resolve()
 
 
@@ -282,7 +294,9 @@ def _verify_pushed_incident_branch(
     try:
         credential = resolve_push_credential(credential_ref)
     except (RuntimeError, ValueError) as error:
-        raise PRPublicationError("could not resolve the configured push credential") from error
+        raise PRPublicationError(
+            "could not resolve the configured push credential"
+        ) from error
     environment = isolated_push_environment(credential, provider=provider)
 
     origin_url = _workspace_git_text(
@@ -293,7 +307,9 @@ def _verify_pushed_incident_branch(
         environment=environment,
         action="read workspace origin",
     ).strip()
-    if _normalized_repository_url(origin_url) != _normalized_repository_url(configured_url):
+    if _normalized_repository_url(origin_url) != _normalized_repository_url(
+        configured_url
+    ):
         raise PRPublicationError("workspace origin does not match repository.url")
 
     branch = _workspace_git_text(
@@ -306,7 +322,9 @@ def _verify_pushed_incident_branch(
         action="read workspace branch",
     ).strip()
     if branch != request.branch:
-        raise PRPublicationError("request.branch must match the checked-out incident branch")
+        raise PRPublicationError(
+            "request.branch must match the checked-out incident branch"
+        )
     if _workspace_git_text(
         workspace_path,
         "status",
@@ -315,7 +333,9 @@ def _verify_pushed_incident_branch(
         environment=environment,
         action="inspect workspace changes",
     ).strip():
-        raise PRPublicationError("workspace must be clean before publication validation")
+        raise PRPublicationError(
+            "workspace must be clean before publication validation"
+        )
 
     head = _workspace_git_text(
         workspace_path,
@@ -331,9 +351,13 @@ def _verify_pushed_incident_branch(
         environment=environment,
     )
     if remote != head:
-        raise PRPublicationError("request.branch must already be pushed at the workspace commit")
+        raise PRPublicationError(
+            "request.branch must already be pushed at the workspace commit"
+        )
     if expected_commit is not None and head != expected_commit:
-        raise PRPublicationError("incident branch changed during publication validation")
+        raise PRPublicationError(
+            "incident branch changed during publication validation"
+        )
     return PushedIncidentBranch(branch=branch, commit=head)
 
 
@@ -381,7 +405,9 @@ def _remote_branch_commit(
         return None
     lines = output.splitlines()
     if len(lines) != 1:
-        raise PRPublicationError("Git returned multiple origin references for the incident branch")
+        raise PRPublicationError(
+            "Git returned multiple origin references for the incident branch"
+        )
     parts = lines[0].split("\t")
     if len(parts) != 2 or parts[1] != reference:
         raise PRPublicationError(
@@ -412,7 +438,9 @@ def _validated_test_result(value: object, *, run_id: str) -> TestExecutorResult:
     if not isinstance(value.results, list) or any(
         not isinstance(result, CommandResult) for result in value.results
     ):
-        raise PRPublicationError("test_result.results must contain TestExecutor command results")
+        raise PRPublicationError(
+            "test_result.results must contain TestExecutor command results"
+        )
     statuses = {result.status for result in value.results}
     if not statuses:
         expected_status = "INCOMPLETE"
@@ -423,11 +451,15 @@ def _validated_test_result(value: object, *, run_id: str) -> TestExecutorResult:
     else:
         raise PRPublicationError("test_result contains an unsupported command status")
     if value.validation_status != expected_status:
-        raise PRPublicationError("test_result.validation_status disagrees with command results")
+        raise PRPublicationError(
+            "test_result.validation_status disagrees with command results"
+        )
     return value
 
 
-def _validated_pushed_branch(value: object, *, request: PRRequest) -> PushedIncidentBranch:
+def _validated_pushed_branch(
+    value: object, *, request: PRRequest
+) -> PushedIncidentBranch:
     if not isinstance(value, PushedIncidentBranch):
         raise PRPublicationError("pushed_branch must be verified before publication")
     if value.branch != request.branch:
@@ -464,7 +496,9 @@ def _required_text(value: object, field: str) -> str:
 
 def _normalized_draft_pr(value: object) -> dict[str, str]:
     if not isinstance(value, Mapping) or not value:
-        raise PRPublicationError("repair PR publisher must return a draft PR id and/or URL")
+        raise PRPublicationError(
+            "repair PR publisher must return a draft PR id and/or URL"
+        )
     if not set(value).issubset({"id", "url"}):
         raise PRPublicationError("repair PR result contains unsupported fields")
 
@@ -474,7 +508,9 @@ def _normalized_draft_pr(value: object) -> dict[str, str]:
 def _normalized_repair_reference(value: object) -> dict[str, str]:
     """Accept internal idempotency metadata while keeping the result neutral."""
     if not isinstance(value, Mapping) or set(value) != {"id", "url", "reused"}:
-        raise PRPublicationError("repair PR publisher returned an invalid draft-PR reference")
+        raise PRPublicationError(
+            "repair PR publisher returned an invalid draft-PR reference"
+        )
     if not isinstance(value["reused"], bool):
         raise PRPublicationError("repair PR publisher returned an invalid reuse flag")
     return {
@@ -483,7 +519,9 @@ def _normalized_repair_reference(value: object) -> dict[str, str]:
     }
 
 
-def _repository_identity_from_url(repository_url: str, provider: str) -> tuple[str, str]:
+def _repository_identity_from_url(
+    repository_url: str, provider: str
+) -> tuple[str, str]:
     """Extract the Bitbucket workspace or GitHub owner and repository name."""
     if provider not in {"bitbucket", "github"}:
         raise PRPublicationError(
@@ -491,11 +529,17 @@ def _repository_identity_from_url(repository_url: str, provider: str) -> tuple[s
         )
     parsed = urlsplit(repository_url)
     path = parsed.path
-    if not parsed.scheme and ":" in repository_url and not repository_url.startswith("/"):
+    if (
+        not parsed.scheme
+        and ":" in repository_url
+        and not repository_url.startswith("/")
+    ):
         path = repository_url.split(":", maxsplit=1)[1]
     parts = [part for part in path.rstrip("/").removesuffix(".git").split("/") if part]
     if len(parts) != 2:
-        raise PRPublicationError("repository.url must identify a repository owner and name")
+        raise PRPublicationError(
+            "repository.url must identify a repository owner and name"
+        )
     return parts[0], parts[1]
 
 
@@ -531,7 +575,9 @@ def _load_publication_input(stream: TextIO) -> object:
     return json.loads(stream.read().removeprefix("\ufeff"))
 
 
-def _serialized_test_result(value: TestExecutorResult | None) -> dict[str, object] | None:
+def _serialized_test_result(
+    value: TestExecutorResult | None,
+) -> dict[str, object] | None:
     if value is None:
         return None
     return {

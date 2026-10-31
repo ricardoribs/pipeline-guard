@@ -96,7 +96,9 @@ class _AdapterRegistryProtocol(Protocol):
 class _EvidenceProviderRegistryProtocol(Protocol):
     """Operations the configuration validator needs from evidence providers."""
 
-    def validate_config(self, provider_type: str, config: Any) -> list[ValidationError]: ...
+    def validate_config(
+        self, provider_type: str, config: Any
+    ) -> list[ValidationError]: ...
 
 
 class ConfigValidationError(ValueError):
@@ -114,7 +116,9 @@ class ConfigValidationError(ValueError):
         self.file_path = file_path
         self.field = field
         self.correction = correction
-        super().__init__(f"{code}: {file_path}: field {field}: {message} Correction: {correction}")
+        super().__init__(
+            f"{code}: {file_path}: field {field}: {message} Correction: {correction}"
+        )
 
 
 def _load_config(config_path: Path) -> dict[str, Any]:
@@ -222,7 +226,9 @@ def _is_credential_field(field_name: str) -> bool:
     normalized = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", field_name)
     normalized = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", normalized)
     normalized = re.sub(r"[^A-Za-z0-9]+", "_", normalized).strip("_").lower()
-    return normalized in _CREDENTIAL_FIELD_NAMES or normalized.endswith(_CREDENTIAL_FIELD_SUFFIXES)
+    return normalized in _CREDENTIAL_FIELD_NAMES or normalized.endswith(
+        _CREDENTIAL_FIELD_SUFFIXES
+    )
 
 
 def _has_url_userinfo(value: str) -> bool:
@@ -305,7 +311,9 @@ def _validate_credential_value(
         return
 
     if field.endswith(("push_credential_ref", "authorization_secret_ref")):
-        if isinstance(value, str) and _PUSH_CREDENTIAL_REFERENCE_PATTERN.fullmatch(value):
+        if isinstance(value, str) and _PUSH_CREDENTIAL_REFERENCE_PATTERN.fullmatch(
+            value
+        ):
             return
         raise ConfigValidationError(
             "CONFIG_LITERAL_CREDENTIAL",
@@ -479,7 +487,9 @@ def _schema_validation_error(
 
     if error.validator == "required":
         instance = error.instance if isinstance(error.instance, dict) else {}
-        required = error.validator_value if isinstance(error.validator_value, list) else []
+        required = (
+            error.validator_value if isinstance(error.validator_value, list) else []
+        )
         missing = next(
             (str(name) for name in required if name not in instance),
             "<unknown>",
@@ -503,10 +513,14 @@ def _schema_validation_error(
         suggestions = difflib.get_close_matches(unknown_field, sorted(allowed), n=1)
 
         if suggestions:
-            correction = f"replace '{unknown_field}' with '{suggestions[0]}' or remove the field"
+            correction = (
+                f"replace '{unknown_field}' with '{suggestions[0]}' or remove the field"
+            )
         else:
             allowed_text = ", ".join(sorted(allowed)) or "(none)"
-            correction = f"remove '{unknown_field}'; allowed fields here are: {allowed_text}"
+            correction = (
+                f"remove '{unknown_field}'; allowed fields here are: {allowed_text}"
+            )
 
         return ConfigValidationError(
             "CONFIG_UNKNOWN_FIELD",

@@ -22,7 +22,9 @@ def _load_module(module_name: str, path: Path):
         sys.path.remove(str(SCRIPTS_DIR))
 
 
-artifact_store = _load_module("pipeline_guard_artifact_store", SCRIPTS_DIR / "artifact_store.py")
+artifact_store = _load_module(
+    "pipeline_guard_artifact_store", SCRIPTS_DIR / "artifact_store.py"
+)
 validator = _load_module(
     "pipeline_guard_incident_validator", SCRIPTS_DIR / "incident_validator.py"
 )
@@ -51,7 +53,11 @@ def test_correlated_retry_reuses_artifacts_even_when_run_id_changes(tmp_path):
 
     def collect_evidence(_incident):
         calls.append("collected")
-        return {"evidence_id": "evidence-1", "uri": "artifact://evidence/1", "hash": "abc"}
+        return {
+            "evidence_id": "evidence-1",
+            "uri": "artifact://evidence/1",
+            "hash": "abc",
+        }
 
     first = validator.validate_or_reuse_incident(
         incident, artifact_store=store, collect_evidence=collect_evidence

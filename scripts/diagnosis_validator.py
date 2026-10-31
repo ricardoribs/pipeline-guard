@@ -37,7 +37,9 @@ def validate_diagnosis(
     if not isinstance(incident_id, str) or not incident_id.strip():
         raise DiagnosisValidationError("incident_id must be a non-empty string")
     if not isinstance(investigation_budget_exhausted, bool):
-        raise DiagnosisValidationError("investigation_budget_exhausted must be a boolean")
+        raise DiagnosisValidationError(
+            "investigation_budget_exhausted must be a boolean"
+        )
 
     if investigation_budget_exhausted:
         return _unknown_diagnosis(incident_id, "investigation_budget_exhausted")

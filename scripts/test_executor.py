@@ -94,7 +94,11 @@ class TestExecutor:
 
         self._allowlist: dict[str, dict[str, Any]] = {}
         for entry in commands:
-            if not isinstance(entry, dict) or "name" not in entry or "command" not in entry:
+            if (
+                not isinstance(entry, dict)
+                or "name" not in entry
+                or "command" not in entry
+            ):
                 raise TestExecutorConfigurationError(
                     "each entry in 'validation.commands' must have 'name' and 'command' fields"
                 )
@@ -164,7 +168,9 @@ class TestExecutor:
             log_ref: str | None = None
             if self._store is not None:
                 reference = f"{name}-log-{self._instance_id}-{self._attempt}"
-                stored = self._store.put(self._run_id, reference, _redact_fn(log_text).encode())
+                stored = self._store.put(
+                    self._run_id, reference, _redact_fn(log_text).encode()
+                )
                 if not stored:
                     error_message = (
                         f"artifact store rejected reference '{reference}' for run "

@@ -75,7 +75,9 @@ class AuthoringLimitReached(AuthoringRunnerError):
         if reason_code not in {"TIME_LIMIT", "TOKEN_LIMIT"}:
             raise ValueError("reason_code must be TIME_LIMIT or TOKEN_LIMIT")
         self.reason_code = reason_code
-        super().__init__(f"Authoring stopped because the {reason_code.lower()} was reached")
+        super().__init__(
+            f"Authoring stopped because the {reason_code.lower()} was reached"
+        )
 
 
 @dataclass(frozen=True)
@@ -143,18 +145,25 @@ def run_authoring(
     normalized_prompt = _required_text(prompt, "prompt")
     normalized_paths = _normalize_approved_read_paths(approved_read_paths)
     normalized_turns = _positive_integer(max_turns, "max_turns")
-    grace_seconds = _positive_number(termination_grace_seconds, "termination_grace_seconds")
+    grace_seconds = _positive_number(
+        termination_grace_seconds, "termination_grace_seconds"
+    )
     workspace_path = Path(workspace.path).resolve(strict=True)
     if not workspace_path.is_dir():
-        raise AuthoringRunnerConfigurationError("workspace.path must be an existing directory")
+        raise AuthoringRunnerConfigurationError(
+            "workspace.path must be an existing directory"
+        )
     resolved_plugin_root = Path(plugin_root).resolve(strict=True)
     if not resolved_plugin_root.is_dir():
-        raise AuthoringRunnerConfigurationError("plugin_root must be an existing directory")
+        raise AuthoringRunnerConfigurationError(
+            "plugin_root must be an existing directory"
+        )
 
     _assert_unprivileged_process()
     environment = workspace.authorship_environment()
     if not isinstance(environment, dict) or not all(
-        isinstance(name, str) and isinstance(value, str) for name, value in environment.items()
+        isinstance(name, str) and isinstance(value, str)
+        for name, value in environment.items()
     ):
         raise AuthoringRunnerConfigurationError(
             "workspace.authorship_environment() must return string environment entries"
@@ -191,7 +200,9 @@ def run_authoring(
         prefix="pipeline-guard-authoring-", dir=trusted_parent
     ) as trusted_directory:
         trusted_root = Path(trusted_directory).resolve(strict=True)
-        if trusted_root == workspace_path or trusted_root.is_relative_to(workspace_path):
+        if trusted_root == workspace_path or trusted_root.is_relative_to(
+            workspace_path
+        ):
             raise AuthoringRunnerConfigurationError(
                 "trusted authoring inputs must be outside the consumer repository"
             )
@@ -241,7 +252,9 @@ def run_authoring(
     except ExecutionBudgetExceeded as error:
         raise _limit_from_budget(error) from error
     if return_code != 0:
-        raise AuthoringRunnerError(f"Claude Code authoring failed with exit {return_code}")
+        raise AuthoringRunnerError(
+            f"Claude Code authoring failed with exit {return_code}"
+        )
     if result.get("is_error") is not False:
         raise AuthoringRunnerError("Claude Code authoring returned is_error=true")
 
@@ -264,7 +277,9 @@ def _filtered_model_environment(source: Mapping[str, str]) -> dict[str, str]:
                 f"model environment variable {normalized_name} must be a string"
             )
         environment[normalized_name] = value
-    if not environment.get("ANTHROPIC_AUTH_TOKEN") and not environment.get("ANTHROPIC_API_KEY"):
+    if not environment.get("ANTHROPIC_AUTH_TOKEN") and not environment.get(
+        "ANTHROPIC_API_KEY"
+    ):
         raise AuthoringRunnerConfigurationError(
             "ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY is required for authoring"
         )
@@ -294,7 +309,9 @@ def _normalize_approved_read_paths(paths: Sequence[str]) -> list[str]:
             )
         normalized_path = path.as_posix().removeprefix("./")
         if normalized_path in {"", "."}:
-            raise AuthoringRunnerConfigurationError("approved_read_paths must name exact files")
+            raise AuthoringRunnerConfigurationError(
+                "approved_read_paths must name exact files"
+            )
         key = normalized_path.casefold()
         if key not in seen:
             seen.add(key)
@@ -355,7 +372,9 @@ def _agent_definition(
         )
     raw_tools = metadata.get("tools")
     if not isinstance(raw_tools, str):
-        raise AuthoringRunnerConfigurationError("remediation-agent tools must be a string")
+        raise AuthoringRunnerConfigurationError(
+            "remediation-agent tools must be a string"
+        )
     tools = tuple(tool.strip() for tool in raw_tools.split(",") if tool.strip())
     if tools != _ALLOWED_TOOLS:
         raise AuthoringRunnerConfigurationError(
@@ -363,13 +382,19 @@ def _agent_definition(
         )
     model = model_environment.get("ANTHROPIC_MODEL") or metadata.get("model")
     if not isinstance(model, str) or not model.strip():
-        raise AuthoringRunnerConfigurationError("remediation-agent model must be configured")
+        raise AuthoringRunnerConfigurationError(
+            "remediation-agent model must be configured"
+        )
     agent_prompt = parts[2].strip()
     if not agent_prompt:
-        raise AuthoringRunnerConfigurationError("remediation-agent prompt must not be empty")
+        raise AuthoringRunnerConfigurationError(
+            "remediation-agent prompt must not be empty"
+        )
     return {
         _AGENT_NAME: {
-            "description": _required_text(metadata.get("description"), "agent description"),
+            "description": _required_text(
+                metadata.get("description"), "agent description"
+            ),
             "prompt": agent_prompt,
             "tools": list(tools),
             "model": model,
@@ -495,7 +520,9 @@ def _stop_completed_process_group(
     with suppress(ProcessLookupError):
         os.killpg(process.pid, signal.SIGKILL)
     if not _wait_for_process_group_exit(process.pid, grace_seconds):
-        raise AuthoringRunnerError("Authoring process group did not exit after completion")
+        raise AuthoringRunnerError(
+            "Authoring process group did not exit after completion"
+        )
 
 
 def _wait_for_process_group_exit(process_group_id: int, timeout: float) -> bool:
@@ -552,7 +579,9 @@ def _interrupt_process_group(process: subprocess.Popen[str]) -> None:
         pass
 
 
-def _terminate_process_group(process: subprocess.Popen[str], job: ProcessJob | None) -> None:
+def _terminate_process_group(
+    process: subprocess.Popen[str], job: ProcessJob | None
+) -> None:
     if os.name == "nt":
         if process.poll() is None:
             with suppress(OSError):
@@ -580,7 +609,9 @@ def _parse_stream(stdout: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 f"Claude stream line {line_number} is not valid JSON"
             ) from error
         if not isinstance(event, dict):
-            raise AuthoringRunnerError(f"Claude stream line {line_number} must be a JSON object")
+            raise AuthoringRunnerError(
+                f"Claude stream line {line_number} must be a JSON object"
+            )
         events.append(event)
     results = [event for event in events if event.get("type") == "result"]
     if len(results) != 1:

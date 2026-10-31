@@ -138,7 +138,9 @@ def build_remediation_result(
     or merges pull requests.
     """
     if not isinstance(git_result, GitExecutionResult):
-        raise RemediationResultValidationError("git_result must be a GitExecutionResult")
+        raise RemediationResultValidationError(
+            "git_result must be a GitExecutionResult"
+        )
 
     normalized_incident_id = _required_nonempty_text(incident_id, "incident_id")
     files_changed = _committed_files_changed(workspace, git_result)
@@ -195,7 +197,9 @@ def commit_and_push(
     so it never commits bytes that differ from the validated patch. It pushes
     exactly one incident branch to ``origin`` and has no pull-request behavior.
     """
-    base_commit, branch, current_commit = _require_prepared_incident_workspace(workspace)
+    base_commit, branch, current_commit = _require_prepared_incident_workspace(
+        workspace
+    )
     expected_hash = _require_accepted_patch_validation(patch_validation, base_commit)
     normalized_provider = _required_provider(provider)
 
@@ -238,11 +242,15 @@ def commit_and_push(
 def _required_provider(value: object) -> str:
     """Require the repository provider before selecting Git authentication semantics."""
     if not isinstance(value, str) or not value.strip():
-        raise GitExecutorValidationError("repository.provider must be a non-empty string")
+        raise GitExecutorValidationError(
+            "repository.provider must be a non-empty string"
+        )
     return value.strip().casefold()
 
 
-def _require_prepared_incident_workspace(workspace: ClonedWorkspace) -> tuple[str, str, str]:
+def _require_prepared_incident_workspace(
+    workspace: ClonedWorkspace,
+) -> tuple[str, str, str]:
     base_commit = workspace.verified_base_commit
     branch = workspace.incident_branch
     if base_commit is None or branch is None:
@@ -293,7 +301,10 @@ def _require_accepted_patch_validation(
         )
 
     patch_hash = patch_validation.get("patch_hash")
-    if not isinstance(patch_hash, str) or _PATCH_HASH_PATTERN.fullmatch(patch_hash) is None:
+    if (
+        not isinstance(patch_hash, str)
+        or _PATCH_HASH_PATTERN.fullmatch(patch_hash) is None
+    ):
         raise GitExecutorValidationError(
             "patch validation patch_hash must be a canonical SHA-256 reference"
         )
@@ -302,7 +313,9 @@ def _require_accepted_patch_validation(
 
 def _normalize_commit(value: object, field: str) -> str:
     if not isinstance(value, str) or _COMMIT_PATTERN.fullmatch(value) is None:
-        raise GitExecutorValidationError(f"{field} must be a complete Git commit identifier")
+        raise GitExecutorValidationError(
+            f"{field} must be a complete Git commit identifier"
+        )
     return value.lower()
 
 
@@ -319,7 +332,9 @@ def _require_only_validated_tracked_changes(workspace: ClonedWorkspace) -> None:
 
     status_entries = status.splitlines()
     if any(
-        len(entry) < 3 or entry[:2] in _UNMERGED_STATUS_CODES or entry[:2] in {"??", "!!"}
+        len(entry) < 3
+        or entry[:2] in _UNMERGED_STATUS_CODES
+        or entry[:2] in {"??", "!!"}
         for entry in status_entries
     ):
         raise GitExecutorValidationError(
@@ -424,15 +439,21 @@ def _commit_staged_patch(workspace: ClonedWorkspace, branch: str) -> None:
 
 def _empty_hooks_directory(workspace: ClonedWorkspace) -> Path:
     try:
-        hooks_path = Path(tempfile.mkdtemp(prefix="git-executor-hooks-", dir=workspace.path.parent))
+        hooks_path = Path(
+            tempfile.mkdtemp(prefix="git-executor-hooks-", dir=workspace.path.parent)
+        )
     except OSError as error:
-        raise GitExecutorError("could not prepare the executor hook isolation directory") from error
+        raise GitExecutorError(
+            "could not prepare the executor hook isolation directory"
+        ) from error
     if (
         hooks_path.is_symlink()
         or not hooks_path.is_dir()
         or hooks_path.parent != workspace.path.parent
     ):
-        raise GitExecutorError("executor hook isolation directory is not a safe directory")
+        raise GitExecutorError(
+            "executor hook isolation directory is not a safe directory"
+        )
     return hooks_path
 
 
@@ -441,7 +462,9 @@ def _remove_empty_hooks_directory(hooks_path: Path) -> None:
     try:
         hooks_path.rmdir()
     except OSError as error:
-        raise GitExecutorError("could not remove the executor hook isolation directory") from error
+        raise GitExecutorError(
+            "could not remove the executor hook isolation directory"
+        ) from error
 
 
 def _current_commit(workspace: ClonedWorkspace) -> str:
@@ -501,7 +524,9 @@ def _remote_branch_commit(
 
     lines = output.splitlines()
     if len(lines) != 1:
-        raise GitExecutorError("Git returned multiple origin references for the incident branch")
+        raise GitExecutorError(
+            "Git returned multiple origin references for the incident branch"
+        )
     parts = lines[0].split("\t")
     if len(parts) != 2 or parts[1] != reference:
         raise GitExecutorError(
@@ -552,7 +577,9 @@ def isolated_push_environment(
 
 def _push_authorization_header(push_credential: str, *, provider: str | None) -> str:
     """Return the provider-compatible authorization header for isolated Git HTTP."""
-    normalized_provider = provider.strip().casefold() if isinstance(provider, str) else ""
+    normalized_provider = (
+        provider.strip().casefold() if isinstance(provider, str) else ""
+    )
     if normalized_provider == "bitbucket":
         token_pair = f"x-token-auth:{push_credential}".encode()
         encoded_token_pair = b64encode(token_pair).decode("ascii")
@@ -572,7 +599,9 @@ def _push_incident_branch(
     try:
         parsed = urlsplit(repository_url)
     except ValueError:
-        raise GitExecutorValidationError("repository.url is invalid for a Git push") from None
+        raise GitExecutorValidationError(
+            "repository.url is invalid for a Git push"
+        ) from None
     local_path = Path(repository_url).is_absolute() and not repository_url.startswith(
         ("//", "\\\\")
     )
@@ -676,7 +705,9 @@ def _parse_numstat(value: bytes) -> list[dict[str, Any]]:
             ) from error
         normalized.append(
             {
-                "path": _required_nonempty_text(path, f"committed file statistic {index}.path"),
+                "path": _required_nonempty_text(
+                    path, f"committed file statistic {index}.path"
+                ),
                 "lines_added": int(lines_added),
                 "lines_removed": int(lines_removed),
             }
@@ -685,14 +716,21 @@ def _parse_numstat(value: bytes) -> list[dict[str, Any]]:
 
 
 def _normalized_test_results(test_result: object) -> tuple[list[dict[str, Any]], str]:
-    if not hasattr(test_result, "results") or not hasattr(test_result, "validation_status"):
+    if not hasattr(test_result, "results") or not hasattr(
+        test_result, "validation_status"
+    ):
         raise RemediationResultValidationError(
             "test_result must provide results and validation_status"
         )
     result_view = cast(_TestResultView, test_result)
     validation_status = result_view.validation_status
-    if not isinstance(validation_status, str) or validation_status not in _TEST_VALIDATION_STATUSES:
-        raise RemediationResultValidationError("test_result.validation_status is invalid")
+    if (
+        not isinstance(validation_status, str)
+        or validation_status not in _TEST_VALIDATION_STATUSES
+    ):
+        raise RemediationResultValidationError(
+            "test_result.validation_status is invalid"
+        )
     results = result_view.results
     if not isinstance(results, list):
         raise RemediationResultValidationError("test_result.results must be a list")
@@ -705,7 +743,9 @@ def _normalized_test_results(test_result: object) -> tuple[list[dict[str, Any]],
                     f"test_result.results[{index}] is missing {attribute!r}"
                 )
         command_view = cast(_CommandResultView, item)
-        command = _required_nonempty_text(command_view.name, f"test_result.results[{index}].name")
+        command = _required_nonempty_text(
+            command_view.name, f"test_result.results[{index}].name"
+        )
         status = command_view.status
         duration_seconds = command_view.duration_seconds
         log_reference = command_view.log_ref
@@ -756,7 +796,9 @@ def _normalized_pr_validation_status(value: object, test_validation_status: str)
     if not isinstance(value, str) or value not in _PR_VALIDATION_STATUSES:
         raise RemediationResultValidationError("pr_validation_status is invalid")
     if value == "VALIDATED" and test_validation_status != "ALL_PASSED":
-        raise RemediationResultValidationError("VALIDATED requires Test Executor status ALL_PASSED")
+        raise RemediationResultValidationError(
+            "VALIDATED requires Test Executor status ALL_PASSED"
+        )
     if value == "PUBLISHED_UNVALIDATED" and test_validation_status == "ALL_PASSED":
         raise RemediationResultValidationError(
             "PUBLISHED_UNVALIDATED requires incomplete or failed test validation"
@@ -823,12 +865,16 @@ def _normalized_draft_pr(value: object | None) -> dict[str, str]:
     if not isinstance(value, Mapping):
         raise RemediationResultValidationError("draft_pr must be an object")
     if not set(value).issubset({"url", "id"}) or not value:
-        raise RemediationResultValidationError("draft_pr must contain only url and/or id")
+        raise RemediationResultValidationError(
+            "draft_pr must contain only url and/or id"
+        )
 
     normalized: dict[str, str] = {}
     for field in ("url", "id"):
         if field in value:
-            normalized[field] = _required_nonempty_text(value[field], f"draft_pr.{field}")
+            normalized[field] = _required_nonempty_text(
+                value[field], f"draft_pr.{field}"
+            )
     return normalized
 
 
@@ -849,7 +895,9 @@ def _required_nonempty_text(value: object, field: str) -> str:
 
 def _validate_remediation_result(result: Mapping[str, Any]) -> None:
     validator = Draft202012Validator(_load_remediation_result_schema())
-    errors = sorted(validator.iter_errors(result), key=lambda error: list(error.absolute_path))
+    errors = sorted(
+        validator.iter_errors(result), key=lambda error: list(error.absolute_path)
+    )
     if errors:
         first = errors[0]
         field = ".".join(str(part) for part in first.absolute_path) or "<root>"
@@ -879,7 +927,9 @@ def _git_text(
     try:
         completed = _run_git_command(
             ["git", "-C", str(workspace.path), "-c", "core.longpaths=true", *arguments],
-            environment=dict(environment) if environment is not None else _git_environment(),
+            environment=dict(environment)
+            if environment is not None
+            else _git_environment(),
             timeout=_GIT_TIMEOUT_SECONDS,
             capture_stdout=True,
         )
@@ -953,8 +1003,12 @@ def validate_remediation_git_configuration(
             parsed = urlsplit(url)
         except ValueError:
             parsed = None
-        if parsed is not None and (parsed.username is not None or parsed.password is not None):
-            raise GitExecutorValidationError("repository.url must not contain embedded credentials")
+        if parsed is not None and (
+            parsed.username is not None or parsed.password is not None
+        ):
+            raise GitExecutorValidationError(
+                "repository.url must not contain embedded credentials"
+            )
         local_path = Path(url).is_absolute() and not url.startswith(("//", "\\\\"))
         if parsed is None or (parsed.scheme != "https" and not local_path):
             raise GitExecutorValidationError(

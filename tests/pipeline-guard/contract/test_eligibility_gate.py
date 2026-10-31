@@ -24,9 +24,14 @@ if str(PLUGIN_ROOT) not in sys.path:
 evaluate_eligibility = import_module("scripts.eligibility_gate").evaluate_eligibility
 
 REFERENCE_CASES = json.loads(
-    (PLUGIN_ROOT / "tests" / "pipeline-guard" / "fixtures" / "dbt" / "reference_cases.json").read_text(
-        encoding="utf-8"
-    )
+    (
+        PLUGIN_ROOT
+        / "tests"
+        / "pipeline-guard"
+        / "fixtures"
+        / "dbt"
+        / "reference_cases.json"
+    ).read_text(encoding="utf-8")
 )
 DIAGNOSIS_SCHEMA = json.loads(
     (SCHEMA_DIR / "pipeline_diagnosis_v1.schema.json").read_text(encoding="utf-8")
@@ -71,7 +76,9 @@ def _diagnosis(case: dict[str, Any]) -> dict[str, Any]:
         "evidence_citations": (
             []
             if case["blind"]
-            else [{"evidence_id": case["case_id"], "claim": "The reference run failed."}]
+            else [
+                {"evidence_id": case["case_id"], "claim": "The reference run failed."}
+            ]
         ),
     }
 
@@ -115,7 +122,9 @@ def test_reference_inventory_contains_all_twelve_cases_and_four_blind_cases() ->
 
 
 @pytest.mark.parametrize("case", REFERENCE_CASES, ids=lambda case: case["case_id"])
-def test_reference_case_receives_expected_eligibility_decision(case: dict[str, Any]) -> None:
+def test_reference_case_receives_expected_eligibility_decision(
+    case: dict[str, Any],
+) -> None:
     diagnosis = _diagnosis(case)
     Draft202012Validator(DIAGNOSIS_SCHEMA).validate(diagnosis)
 
@@ -159,6 +168,8 @@ def test_permissive_policy_never_makes_non_code_causes_eligible(
         independent_signals={"tests_passed": True},
     )
 
-    assert result["decision"] == ("ESCALATE" if failure_family == "UNKNOWN" else "REPORT_ONLY")
+    assert result["decision"] == (
+        "ESCALATE" if failure_family == "UNKNOWN" else "REPORT_ONLY"
+    )
     assert result["decision"] != "ELIGIBLE_FOR_REMEDIATION"
     Draft202012Validator(DECISION_SCHEMA).validate(result)

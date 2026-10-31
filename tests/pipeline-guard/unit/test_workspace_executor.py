@@ -37,7 +37,9 @@ def test_default_temp_directory_inside_a_worktree_is_rejected(
         capture_output=True,
         text=True,
     )
-    monkeypatch.setattr("scripts.workspace_executor.tempfile.gettempdir", lambda: str(checkout))
+    monkeypatch.setattr(
+        "scripts.workspace_executor.tempfile.gettempdir", lambda: str(checkout)
+    )
 
     with pytest.raises(WorkspaceValidationError, match="parent_dir"):
         clone_workspace(
@@ -87,7 +89,9 @@ def test_clone_timeout_preserves_cleanup_failure_as_a_note(
         original_close(self)
         raise WorkspaceExecutionError("cleanup failed")
 
-    monkeypatch.setattr(workspace_executor, "_reject_parent_inside_worktree", lambda _parent: None)
+    monkeypatch.setattr(
+        workspace_executor, "_reject_parent_inside_worktree", lambda _parent: None
+    )
     monkeypatch.setattr(
         workspace_executor, "validate_workspace_input", lambda *_args, **_kwargs: inputs
     )
@@ -131,7 +135,9 @@ def test_prepare_workspace_rejects_an_unknown_approved_commit(tmp_path: Path) ->
     """An approval cannot name a commit that the configured repository does not contain."""
     _, _, config_path = _repository_with_config(tmp_path)
 
-    with pytest.raises(WorkspaceValidationError, match="Git could not verify") as captured:
+    with pytest.raises(
+        WorkspaceValidationError, match="Git could not verify"
+    ) as captured:
         prepare_workspace(
             config_path,
             base_commit="f" * 40,
@@ -157,7 +163,9 @@ def test_prepare_workspace_creates_an_incident_branch_from_the_configured_prefix
         assert _git(workspace.path, "branch", "--show-current").stdout.strip() == (
             "pipeline-guard/INC-PIPELINE-001"
         )
-        assert _git(workspace.path, "rev-parse", "HEAD").stdout.strip() == approved_commit
+        assert (
+            _git(workspace.path, "rev-parse", "HEAD").stdout.strip() == approved_commit
+        )
 
 
 def test_prepare_workspace_preserves_work_in_an_incomplete_retained_clone(
@@ -170,7 +178,9 @@ def test_prepare_workspace_preserves_work_in_an_incomplete_retained_clone(
         base_commit=approved_commit,
         incident_id="INC-INCOMPLETE-001",
     )
-    retained_directory = workspace_executor._retained_workspace_directory(inputs, tmp_path)
+    retained_directory = workspace_executor._retained_workspace_directory(
+        inputs, tmp_path
+    )
     repository_path = retained_directory / "repository"
     (repository_path / ".git").mkdir(parents=True)
     uncommitted_file = repository_path / "uncommitted.txt"
@@ -214,11 +224,17 @@ def test_prepare_workspace_preserves_work_in_a_retained_clone_with_an_invalid_he
         retained_path = first_workspace.path
         _git(first_workspace.path, "config", "user.email", "pipeline-guard@example.com")
         _git(first_workspace.path, "config", "user.name", "Pipeline Guard Tests")
-        (first_workspace.path / "remediation.txt").write_text("committed\n", encoding="utf-8")
+        (first_workspace.path / "remediation.txt").write_text(
+            "committed\n", encoding="utf-8"
+        )
         _git(first_workspace.path, "add", "remediation.txt")
         _git(first_workspace.path, "commit", "-m", "add remediation")
-        remediation_commit = _git(first_workspace.path, "rev-parse", "HEAD").stdout.strip()
-        (first_workspace.path / "uncommitted.txt").write_text("keep me\n", encoding="utf-8")
+        remediation_commit = _git(
+            first_workspace.path, "rev-parse", "HEAD"
+        ).stdout.strip()
+        (first_workspace.path / "uncommitted.txt").write_text(
+            "keep me\n", encoding="utf-8"
+        )
 
     (retained_path / ".git" / "HEAD").write_text("garbage\n", encoding="utf-8")
 
@@ -235,16 +251,28 @@ def test_prepare_workspace_preserves_work_in_a_retained_clone_with_an_invalid_he
 
     assert "discard_prepared_workspace" in captured.value.correction
     assert retained_path.is_dir()
-    assert (retained_path / "uncommitted.txt").read_text(encoding="utf-8") == "keep me\n"
+    assert (retained_path / "uncommitted.txt").read_text(
+        encoding="utf-8"
+    ) == "keep me\n"
     branch_ref = (
-        retained_path / ".git" / "refs" / "heads" / "pipeline-guard" / "INC-CORRUPT-HEAD-001"
+        retained_path
+        / ".git"
+        / "refs"
+        / "heads"
+        / "pipeline-guard"
+        / "INC-CORRUPT-HEAD-001"
     )
     assert branch_ref.read_text(encoding="utf-8").strip() == remediation_commit
     (retained_path / ".git" / "HEAD").write_text(
         "ref: refs/heads/pipeline-guard/INC-CORRUPT-HEAD-001\n",
         encoding="utf-8",
     )
-    assert _git(retained_path, "cat-file", "-e", f"{remediation_commit}^{{commit}}").returncode == 0
+    assert (
+        _git(
+            retained_path, "cat-file", "-e", f"{remediation_commit}^{{commit}}"
+        ).returncode
+        == 0
+    )
     assert discard_prepared_workspace(
         config_path,
         incident_id=incident_id,
@@ -293,7 +321,9 @@ def test_prepare_workspace_preserves_uncommitted_work_when_retained_head_is_miss
     )
 
 
-def test_prepare_workspace_reuses_an_incident_branch_across_calls(tmp_path: Path) -> None:
+def test_prepare_workspace_reuses_an_incident_branch_across_calls(
+    tmp_path: Path,
+) -> None:
     """A retry restores the branch after failure via the public preparation entry point."""
     _, approved_commit, config_path = _repository_with_config(tmp_path)
     first_path: Path | None = None
@@ -329,8 +359,14 @@ def test_prepare_workspace_reuses_an_incident_branch_across_calls(tmp_path: Path
     ) as retried_workspace:
         assert retried_workspace.path == first_path
         assert retried_workspace.incident_branch == branch
-        assert _git(retried_workspace.path, "branch", "--show-current").stdout.strip() == branch
-        assert _git(retried_workspace.path, "rev-parse", "HEAD").stdout.strip() == approved_commit
+        assert (
+            _git(retried_workspace.path, "branch", "--show-current").stdout.strip()
+            == branch
+        )
+        assert (
+            _git(retried_workspace.path, "rev-parse", "HEAD").stdout.strip()
+            == approved_commit
+        )
         assert _git(
             retried_workspace.path,
             "branch",
@@ -342,7 +378,9 @@ def test_prepare_workspace_reuses_an_incident_branch_across_calls(tmp_path: Path
     first_workspace_obj.discard()
 
 
-def test_prepare_workspace_resumes_one_clean_unpushed_remediation_commit(tmp_path: Path) -> None:
+def test_prepare_workspace_resumes_one_clean_unpushed_remediation_commit(
+    tmp_path: Path,
+) -> None:
     """A fresh process may retry a single validated commit that has not been pushed yet."""
     _, approved_commit, config_path = _repository_with_config(tmp_path)
     incident_id = "INC-RESUME-COMMIT"
@@ -373,7 +411,9 @@ def test_prepare_workspace_resumes_one_clean_unpushed_remediation_commit(tmp_pat
     ) as resumed:
         assert resumed.verified_base_commit == approved_commit
         assert resumed.incident_branch == "pipeline-guard/INC-RESUME-COMMIT"
-        assert _git(resumed.path, "rev-parse", "HEAD").stdout.strip() == remediation_commit
+        assert (
+            _git(resumed.path, "rev-parse", "HEAD").stdout.strip() == remediation_commit
+        )
 
     resumed.discard(confirm_unpushed_commits=True)
 
@@ -406,7 +446,9 @@ def test_prepare_workspace_refuses_concurrent_preparation_for_the_same_incident(
                 parent_dir=tmp_path,
             )
         assert retained_path.is_dir()
-        assert _git(retained_path, "rev-parse", "HEAD").stdout.strip() == approved_commit
+        assert (
+            _git(retained_path, "rev-parse", "HEAD").stdout.strip() == approved_commit
+        )
 
     assert discard_prepared_workspace(
         config_path,
@@ -459,7 +501,9 @@ def test_prepare_workspace_rejects_a_retained_dirty_checkout(tmp_path: Path) -> 
         incident_id="INC-REUSE-DIRTY",
         parent_dir=tmp_path,
     ) as workspace:
-        (workspace.path / "uncommitted-change.txt").write_text("pending", encoding="utf-8")
+        (workspace.path / "uncommitted-change.txt").write_text(
+            "pending", encoding="utf-8"
+        )
         retained_path = workspace.path
 
     with pytest.raises(
@@ -515,12 +559,16 @@ def test_discard_prepared_workspace_requires_confirmation_for_unpushed_commits(
         retained_directory = workspace._directory
         _git(workspace.path, "config", "user.email", "pipeline-guard@example.com")
         _git(workspace.path, "config", "user.name", "Pipeline Guard Tests")
-        (workspace.path / "remediation.txt").write_text("keep this commit\n", encoding="utf-8")
+        (workspace.path / "remediation.txt").write_text(
+            "keep this commit\n", encoding="utf-8"
+        )
         _git(workspace.path, "add", "remediation.txt")
         _git(workspace.path, "commit", "-m", "add remediation")
         remediation_commit = _git(workspace.path, "rev-parse", "HEAD").stdout.strip()
 
-    with pytest.raises(WorkspaceExecutionError, match="not present on its approved base"):
+    with pytest.raises(
+        WorkspaceExecutionError, match="not present on its approved base"
+    ):
         discard_prepared_workspace(
             config_path,
             incident_id=incident_id,
@@ -528,9 +576,9 @@ def test_discard_prepared_workspace_requires_confirmation_for_unpushed_commits(
         )
 
     assert retained_directory.is_dir()
-    assert _git(retained_directory / "repository", "rev-parse", "HEAD").stdout.strip() == (
-        remediation_commit
-    )
+    assert _git(
+        retained_directory / "repository", "rev-parse", "HEAD"
+    ).stdout.strip() == (remediation_commit)
     assert discard_prepared_workspace(
         config_path,
         incident_id=incident_id,
@@ -540,7 +588,9 @@ def test_discard_prepared_workspace_requires_confirmation_for_unpushed_commits(
     assert not retained_directory.exists()
 
 
-def test_discard_prepared_workspace_allows_commits_pushed_to_origin(tmp_path: Path) -> None:
+def test_discard_prepared_workspace_allows_commits_pushed_to_origin(
+    tmp_path: Path,
+) -> None:
     """A commit fetched from any origin branch is safe to discard from the local cache."""
     _, approved_commit, config_path = _repository_with_config(tmp_path)
     incident_id = "INC-DISCARD-PUSHED"
@@ -555,7 +605,9 @@ def test_discard_prepared_workspace_allows_commits_pushed_to_origin(tmp_path: Pa
         assert branch is not None
         _git(workspace.path, "config", "user.email", "pipeline-guard@example.com")
         _git(workspace.path, "config", "user.name", "Pipeline Guard Tests")
-        (workspace.path / "remediation.txt").write_text("pushed commit\n", encoding="utf-8")
+        (workspace.path / "remediation.txt").write_text(
+            "pushed commit\n", encoding="utf-8"
+        )
         _git(workspace.path, "add", "remediation.txt")
         _git(workspace.path, "commit", "-m", "add remediation")
         _git(workspace.path, "push", "origin", f"{branch}:refs/heads/{branch}")
@@ -586,7 +638,9 @@ def test_prepare_workspace_fetches_base_and_audits_an_explicit_safe_rebind(
     _git(repository, "commit", "-m", "advance base branch")
     approved_b = _git(repository, "rev-parse", "HEAD").stdout.strip()
 
-    with pytest.raises(WorkspaceValidationError, match="base branch differs from the approved"):
+    with pytest.raises(
+        WorkspaceValidationError, match="base branch differs from the approved"
+    ):
         prepare_workspace(
             config_path,
             base_commit=approved_a,
@@ -594,7 +648,9 @@ def test_prepare_workspace_fetches_base_and_audits_an_explicit_safe_rebind(
             parent_dir=tmp_path,
         )
 
-    with pytest.raises(WorkspaceValidationError, match="older approved base") as captured:
+    with pytest.raises(
+        WorkspaceValidationError, match="older approved base"
+    ) as captured:
         prepare_workspace(
             config_path,
             base_commit=approved_b,
@@ -612,17 +668,25 @@ def test_prepare_workspace_fetches_base_and_audits_an_explicit_safe_rebind(
         allow_branch_rebind=True,
     ) as rebound_workspace:
         assert rebound_workspace.path == retained_path
-        assert _git(rebound_workspace.path, "rev-parse", "HEAD").stdout.strip() == approved_b
+        assert (
+            _git(rebound_workspace.path, "rev-parse", "HEAD").stdout.strip()
+            == approved_b
+        )
         audit = rebound_workspace.branch_rebind_audit
         assert audit is not None
         assert audit.previous_approved_base == approved_a
         assert audit.new_approved_base == approved_b
-        audit_directory = workspace_executor._branch_rebind_audit_directory(rebound_workspace)
+        audit_directory = workspace_executor._branch_rebind_audit_directory(
+            rebound_workspace
+        )
         assert audit_directory.parent == rebound_workspace._directory.parent
         assert audit_directory != rebound_workspace._directory
         audit_files = list(audit_directory.glob("*.json"))
         assert len(audit_files) == 2
-        assert {json.loads(path.read_text(encoding="utf-8"))["event"] for path in audit_files} == {
+        assert {
+            json.loads(path.read_text(encoding="utf-8"))["event"]
+            for path in audit_files
+        } == {
             "requested",
             "completed",
         }
@@ -647,7 +711,9 @@ def test_prepare_workspace_refuses_to_rebind_a_branch_with_extra_commits(
     ) as workspace:
         _git(workspace.path, "config", "user.email", "pipeline-guard@example.com")
         _git(workspace.path, "config", "user.name", "Pipeline Guard Tests")
-        (workspace.path / "extra-commit.txt").write_text("keep this work", encoding="utf-8")
+        (workspace.path / "extra-commit.txt").write_text(
+            "keep this work", encoding="utf-8"
+        )
         _git(workspace.path, "add", "extra-commit.txt")
         _git(workspace.path, "commit", "-m", "add incident work")
 
@@ -694,7 +760,9 @@ def test_prepare_incident_branch_reuses_the_existing_branch_for_the_same_inciden
             "--list",
             "pipeline-guard/*",
         ).stdout.split() == [branch]
-        assert _git(workspace.path, "rev-parse", "HEAD").stdout.strip() == approved_commit
+        assert (
+            _git(workspace.path, "rev-parse", "HEAD").stdout.strip() == approved_commit
+        )
 
 
 def test_prepare_incident_branch_rejects_an_existing_branch_at_a_different_base_commit(
@@ -726,7 +794,9 @@ def test_prepare_incident_branch_rejects_an_existing_branch_at_a_different_base_
     assert captured.value.field == "incident_id"
 
 
-def test_prepare_incident_branch_rejects_an_existing_dirty_branch(tmp_path: Path) -> None:
+def test_prepare_incident_branch_rejects_an_existing_dirty_branch(
+    tmp_path: Path,
+) -> None:
     _, approved_commit, config_path = _repository_with_config(tmp_path)
 
     with prepare_workspace(
@@ -735,7 +805,9 @@ def test_prepare_incident_branch_rejects_an_existing_dirty_branch(tmp_path: Path
         incident_id="INC-PIPELINE-004",
         parent_dir=tmp_path,
     ) as workspace:
-        (workspace.path / "uncommitted-change.txt").write_text("pending", encoding="utf-8")
+        (workspace.path / "uncommitted-change.txt").write_text(
+            "pending", encoding="utf-8"
+        )
 
         with pytest.raises(
             WorkspaceValidationError,
@@ -746,7 +818,9 @@ def test_prepare_incident_branch_rejects_an_existing_dirty_branch(tmp_path: Path
     assert captured.value.field == "workspace"
 
 
-def test_prepare_workspace_encodes_an_incident_id_that_is_not_git_safe(tmp_path: Path) -> None:
+def test_prepare_workspace_encodes_an_incident_id_that_is_not_git_safe(
+    tmp_path: Path,
+) -> None:
     _, approved_commit, config_path = _repository_with_config(tmp_path)
 
     with prepare_workspace(
@@ -758,7 +832,9 @@ def test_prepare_workspace_encodes_an_incident_id_that_is_not_git_safe(tmp_path:
         assert workspace.incident_branch == "pipeline-guard/INC%2FPIPE%3A01"
 
 
-def test_prepare_workspace_requires_a_configured_remediation_branch_prefix(tmp_path: Path) -> None:
+def test_prepare_workspace_requires_a_configured_remediation_branch_prefix(
+    tmp_path: Path,
+) -> None:
     _, approved_commit, config_path = _repository_with_config(tmp_path)
     config_path.write_text(
         config_path.read_text(encoding="utf-8").replace(

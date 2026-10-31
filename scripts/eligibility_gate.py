@@ -17,7 +17,9 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 _PLUGIN_ROOT = Path(__file__).resolve().parents[1]
-_DIAGNOSIS_SCHEMA_PATH = _PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+_DIAGNOSIS_SCHEMA_PATH = (
+    _PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+)
 _DECISION_SCHEMA_PATH = (
     _PLUGIN_ROOT / "contracts" / "schema" / "eligibility_decision_v1.schema.json"
 )
@@ -129,7 +131,9 @@ def evaluate_eligibility(
             rule_id="eligibility.required-signal-failed",
             reason="One or more independently supplied signals did not pass.",
             signals_used=policy.required_signals,
-            limitations=tuple(f"required_signal_failed:{name}" for name in failed_signals),
+            limitations=tuple(
+                f"required_signal_failed:{name}" for name in failed_signals
+            ),
         )
 
     return _decision(
@@ -155,7 +159,9 @@ def _validated_mapping(
 
     document = dict(value)
     validator = Draft202012Validator(_load_schema(schema_path))
-    errors = sorted(validator.iter_errors(document), key=lambda error: list(error.absolute_path))
+    errors = sorted(
+        validator.iter_errors(document), key=lambda error: list(error.absolute_path)
+    )
     if errors:
         first_error = errors[0]
         field = ".".join(str(part) for part in first_error.absolute_path) or "<root>"
@@ -166,7 +172,9 @@ def _validated_mapping(
 def _load_policy(project_config: Mapping[str, Any]) -> _EligibilityPolicy:
     raw_policy = project_config.get("eligibility", {})
     if not isinstance(raw_policy, Mapping):
-        raise EligibilityGateError("project configuration eligibility must be an object")
+        raise EligibilityGateError(
+            "project configuration eligibility must be an object"
+        )
 
     required_signals = raw_policy.get("required_signals", [])
     if not isinstance(required_signals, Sequence) or isinstance(required_signals, str):
@@ -189,7 +197,9 @@ def _validate_signals(signals: Mapping[str, bool] | None) -> dict[str, bool]:
     validated: dict[str, bool] = {}
     for name, value in signals.items():
         if not isinstance(name, str) or not name.strip():
-            raise EligibilityGateError("independent signal names must be non-empty strings")
+            raise EligibilityGateError(
+                "independent signal names must be non-empty strings"
+            )
         if not isinstance(value, bool):
             raise EligibilityGateError(f"independent signal {name!r} must be a boolean")
         validated[name] = value

@@ -88,7 +88,9 @@ class TimeoutProcess(FakeProcess):
     def communicate(self, timeout: float | None = None) -> tuple[str, str]:
         self.communicate_calls += 1
         if self.communicate_calls <= 2:
-            raise subprocess.TimeoutExpired("claude", timeout if timeout is not None else 0.0)
+            raise subprocess.TimeoutExpired(
+                "claude", timeout if timeout is not None else 0.0
+            )
         self.returncode = 143
         return "", "stopped"
 
@@ -102,7 +104,9 @@ class InterruptExitProcess(FakeProcess):
     def communicate(self, timeout: float | None = None) -> tuple[str, str]:
         self.communicate_calls += 1
         if self.communicate_calls == 1:
-            raise subprocess.TimeoutExpired("claude", timeout if timeout is not None else 0.0)
+            raise subprocess.TimeoutExpired(
+                "claude", timeout if timeout is not None else 0.0
+            )
         self.returncode = 130
         return self.stdout, self.stderr
 
@@ -200,7 +204,9 @@ def _install_safe_process_boundary(
 ) -> list[str]:
     checks: list[str] = []
     monkeypatch.setattr(
-        authoring_runner, "_assert_unprivileged_process", lambda: checks.append("checked")
+        authoring_runner,
+        "_assert_unprivileged_process",
+        lambda: checks.append("checked"),
     )
     monkeypatch.setattr(authoring_runner, "_create_process_job", lambda: job)
     monkeypatch.setattr(authoring_runner.subprocess, "Popen", process_factory)
@@ -258,7 +264,9 @@ def test_run_uses_trusted_agent_isolated_settings_and_minimal_environment(
     else:
         assert options["start_new_session"] is True
 
-    assert captured["settings"] == {"permissions": {"blockReadsOutsideWorkingDirectories": True}}
+    assert captured["settings"] == {
+        "permissions": {"blockReadsOutsideWorkingDirectories": True}
+    }
     assert captured["agents"] == {
         "remediation-agent": {
             "description": (
@@ -332,7 +340,9 @@ def test_timeout_interrupts_then_terminates_the_process_group(
     process = TimeoutProcess()
     job = FakeJob()
     termination_events: list[str] = []
-    checks = _install_safe_process_boundary(monkeypatch, lambda *_args, **_kwargs: process, job=job)
+    checks = _install_safe_process_boundary(
+        monkeypatch, lambda *_args, **_kwargs: process, job=job
+    )
     monkeypatch.setattr(
         authoring_runner,
         "_interrupt_process_group",
@@ -413,7 +423,9 @@ def test_normal_completion_terminates_remaining_process_group(
         cleanup_events.extend(["SIGTERM", "wait"])
         completed_process.group_member_running = False
 
-    monkeypatch.setattr(authoring_runner, "_stop_completed_process_group", stop_completed_group)
+    monkeypatch.setattr(
+        authoring_runner, "_stop_completed_process_group", stop_completed_group
+    )
     monkeypatch.setattr(authoring_runner, "_create_process_job", lambda: None)
 
     result = authoring_runner._run_process(
@@ -511,7 +523,9 @@ def test_malformed_or_ambiguous_stream_is_rejected(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, stream: str
 ) -> None:
     workspace = _workspace(tmp_path)
-    _install_safe_process_boundary(monkeypatch, lambda *_args, **_kwargs: FakeProcess(stream))
+    _install_safe_process_boundary(
+        monkeypatch, lambda *_args, **_kwargs: FakeProcess(stream)
+    )
 
     with pytest.raises(AuthoringRunnerError):
         run_authoring(

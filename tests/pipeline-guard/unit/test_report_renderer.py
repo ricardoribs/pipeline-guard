@@ -22,9 +22,14 @@ from scripts.report_renderer import (  # noqa: E402
 sys.path.remove(str(PLUGIN_ROOT))
 
 REFERENCE_CASES = json.loads(
-    (PLUGIN_ROOT / "tests" / "pipeline-guard" / "fixtures" / "dbt" / "reference_cases.json").read_text(
-        encoding="utf-8"
-    )
+    (
+        PLUGIN_ROOT
+        / "tests"
+        / "pipeline-guard"
+        / "fixtures"
+        / "dbt"
+        / "reference_cases.json"
+    ).read_text(encoding="utf-8")
 )
 
 
@@ -41,7 +46,9 @@ def _inputs(case: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
         "evidence_citations": (
             []
             if case["blind"]
-            else [{"evidence_id": case["case_id"], "claim": "The reference run failed."}]
+            else [
+                {"evidence_id": case["case_id"], "claim": "The reference run failed."}
+            ]
         ),
     }
     decision = {
@@ -96,7 +103,14 @@ def test_both_reports_preserve_cause_evidence_and_decision_for_reference_cases(
         assert citation["claim"] in markdown
     if case["blind"]:
         assert "No evidence citations supplied." in markdown
-    for channel_markup in ("<@", "<!channel>", "<at>", "<http", "Block Kit", "AdaptiveCard"):
+    for channel_markup in (
+        "<@",
+        "<!channel>",
+        "<at>",
+        "<http",
+        "Block Kit",
+        "AdaptiveCard",
+    ):
         assert channel_markup not in markdown
         assert channel_markup not in json_path.read_text(encoding="utf-8")
     assert (diagnosis, decision) == before
@@ -113,7 +127,9 @@ def test_optional_details_and_unicode_survive_in_both_formats() -> None:
             "adapter_details": {"dbt": {"status": "error"}},
         }
     )
-    decision.update({"signals_used": ["workspace_clean"], "limitations": ["Review required"]})
+    decision.update(
+        {"signals_used": ["workspace_clean"], "limitations": ["Review required"]}
+    )
     _bind_hash(diagnosis, decision)
 
     markdown, report = render_report(diagnosis, decision)
@@ -136,7 +152,9 @@ def test_optional_details_and_unicode_survive_in_both_formats() -> None:
 
 def test_untrusted_text_cannot_inject_markdown_html_or_channel_mentions() -> None:
     diagnosis, decision = _inputs(REFERENCE_CASES[0])
-    diagnosis["cause"] = "<@U123> <at>Team</at> <script>alert(1)</script>\n# Fake heading [go](url)"
+    diagnosis["cause"] = (
+        "<@U123> <at>Team</at> <script>alert(1)</script>\n# Fake heading [go](url)"
+    )
     _bind_hash(diagnosis, decision)
 
     markdown, report = render_report(diagnosis, decision)
@@ -149,8 +167,12 @@ def test_untrusted_text_cannot_inject_markdown_html_or_channel_mentions() -> Non
     assert report["diagnosis"]["cause"] == diagnosis["cause"]
 
 
-@pytest.mark.parametrize("invalid", ["diagnosis-schema", "decision-schema", "incident", "hash"])
-def test_invalid_or_mismatched_inputs_produce_no_files(invalid: str, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "invalid", ["diagnosis-schema", "decision-schema", "incident", "hash"]
+)
+def test_invalid_or_mismatched_inputs_produce_no_files(
+    invalid: str, tmp_path: Path
+) -> None:
     diagnosis, decision = _inputs(REFERENCE_CASES[0])
     if invalid == "diagnosis-schema":
         diagnosis["approved"] = True
@@ -176,13 +198,20 @@ def test_rendering_is_deterministic_and_ignores_key_order() -> None:
     )
 
 
-def test_cli_writes_reports_and_rejects_invalid_json(tmp_path: Path, capsys: Any) -> None:
+def test_cli_writes_reports_and_rejects_invalid_json(
+    tmp_path: Path, capsys: Any
+) -> None:
     diagnosis, decision = _inputs(REFERENCE_CASES[0])
     diagnosis_path = tmp_path / "diagnosis.json"
     decision_path = tmp_path / "decision.json"
     diagnosis_path.write_text(json.dumps(diagnosis), encoding="utf-8")
     decision_path.write_text(json.dumps(decision), encoding="utf-8")
-    args = [str(diagnosis_path), str(decision_path), "--output-dir", str(tmp_path / "reports")]
+    args = [
+        str(diagnosis_path),
+        str(decision_path),
+        "--output-dir",
+        str(tmp_path / "reports"),
+    ]
 
     assert main(args) == 0
     assert (tmp_path / "reports" / "report.md").is_file()

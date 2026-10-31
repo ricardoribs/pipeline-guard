@@ -87,7 +87,9 @@ def test_supported_provider_requires_an_incident_id():
             raise AssertionError("provider must not be accessed without an incident_id")
 
     with pytest.raises(ValueError, match="incident_id"):
-        collect_if_supported(_UnexpectedProviderCall(), EvidenceCapability.LOGS, {"run": "r1"})
+        collect_if_supported(
+            _UnexpectedProviderCall(), EvidenceCapability.LOGS, {"run": "r1"}
+        )
 
 
 @pytest.mark.parametrize(
@@ -137,7 +139,11 @@ def test_wrapper_rejects_boolean_timeout():
         ("read", "DELETE FROM runs", {}),
         ("read", "SELECT id FROM runs; DROP TABLE runs", {}),
         ("read", "SELECT id FROM runs WHERE run_id = :run_id", {}),
-        ("read", "SELECT id FROM runs WHERE run_id = :run_id", {"run_id": "r1", "extra": 1}),
+        (
+            "read",
+            "SELECT id FROM runs WHERE run_id = :run_id",
+            {"run_id": "r1", "extra": 1},
+        ),
     ],
 )
 def test_wrapper_rejects_unallowlisted_or_unsafe_queries(query_id, query, parameters):

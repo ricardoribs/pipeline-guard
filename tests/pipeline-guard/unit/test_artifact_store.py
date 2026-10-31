@@ -7,7 +7,9 @@ from types import ModuleType
 
 import pytest
 
-ARTIFACT_STORE_PATH = Path(__file__).resolve().parents[3] / "scripts" / "artifact_store.py"
+ARTIFACT_STORE_PATH = (
+    Path(__file__).resolve().parents[3] / "scripts" / "artifact_store.py"
+)
 
 
 def _load_artifact_store_module() -> ModuleType:
@@ -16,7 +18,9 @@ def _load_artifact_store_module() -> ModuleType:
         ARTIFACT_STORE_PATH,
     )
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"could not load artifact store module from {ARTIFACT_STORE_PATH}")
+        raise RuntimeError(
+            f"could not load artifact store module from {ARTIFACT_STORE_PATH}"
+        )
 
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -71,7 +75,9 @@ def test_local_session_removes_only_artifacts_created_in_its_scope(tmp_path):
     with store.session() as session:
         assert isinstance(session, ArtifactSession)
         assert session.put("run-123", "logs/build.log", b"temporary log") is True
-        assert session.put("run-123", "logs/build.index.json", b"temporary index") is True
+        assert (
+            session.put("run-123", "logs/build.index.json", b"temporary index") is True
+        )
         assert session.exists("run-123", "logs/build.log") is True
 
     assert store.exists("run-123", "processed.json") is True
@@ -143,7 +149,9 @@ def test_missing_store_configuration_does_not_fall_back_to_local(tmp_path):
 
 
 def test_host_store_reference_is_required_for_non_local_backend():
-    with pytest.raises(ArtifactStoreConfigurationError, match="provide its host implementation"):
+    with pytest.raises(
+        ArtifactStoreConfigurationError, match="provide its host implementation"
+    ):
         resolve_artifact_store({"runtime": {"artifact_store": "host"}})
 
 

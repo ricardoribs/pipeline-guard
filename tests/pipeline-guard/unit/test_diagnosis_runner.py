@@ -23,7 +23,11 @@ def _budget(tokens=1000):
     return ExecutionBudget(
         {
             "runtime": {
-                "execution_budget": {"max_tool_calls": 10, "max_seconds": 60, "max_tokens": tokens}
+                "execution_budget": {
+                    "max_tool_calls": 10,
+                    "max_seconds": 60,
+                    "max_tokens": tokens,
+                }
             }
         }
     )
@@ -61,7 +65,9 @@ def test_requests_have_timeouts_output_ceiling_and_no_tools():
 def test_prompt_exceeding_budget_never_reaches_generation():
     client = _client()
     with pytest.raises(ExecutionBudgetExceeded, match="max_tokens"):
-        DiagnosisRunner("test-model", client=client)({}, _budget(tokens=100), "agent rules")
+        DiagnosisRunner("test-model", client=client)(
+            {}, _budget(tokens=100), "agent rules"
+        )
     client.messages.create.assert_not_called()
 
 
@@ -114,7 +120,9 @@ def test_other_token_count_bad_request_does_not_fallback():
     client.messages.create.assert_not_called()
 
 
-@pytest.mark.parametrize(("text", "stop_reason"), [('{"x":', "end_turn"), ("{}", "max_tokens")])
+@pytest.mark.parametrize(
+    ("text", "stop_reason"), [('{"x":', "end_turn"), ("{}", "max_tokens")]
+)
 def test_malformed_or_truncated_output_is_not_accepted(text, stop_reason):
     assert (
         DiagnosisRunner("test-model", client=_client(text, stop_reason))(

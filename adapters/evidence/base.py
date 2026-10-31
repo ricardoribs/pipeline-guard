@@ -107,7 +107,9 @@ def collect_if_supported(
 
     incident_id = request.get("incident_id")
     if not isinstance(incident_id, str) or not incident_id.strip():
-        raise ValueError("evidence collection request must include a non-empty incident_id")
+        raise ValueError(
+            "evidence collection request must include a non-empty incident_id"
+        )
 
     origin = provider.name
     if not isinstance(origin, str) or not origin.strip():
@@ -166,7 +168,9 @@ def _finalize_payload(
         "reference": payload.reference,
         "content_hash": content_digest if payload.reference is None else None,
     }
-    identity_text = json.dumps(identity, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    identity_text = json.dumps(
+        identity, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
     identity_digest = hashlib.sha256(identity_text.encode("utf-8")).hexdigest()
 
     return CollectedEvidence(
@@ -198,4 +202,6 @@ def _content_as_text(content: bytes | str | Mapping[str, object]) -> str:
             allow_nan=False,
         )
     except (TypeError, ValueError) as error:
-        raise ValueError("evidence content mappings must be JSON serializable") from error
+        raise ValueError(
+            "evidence content mappings must be JSON serializable"
+        ) from error

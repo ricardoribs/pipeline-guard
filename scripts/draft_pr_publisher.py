@@ -69,11 +69,15 @@ class RepairPRRequest:
             raise RepairPRPublicationError("repair PR request must set draft=true")
         provider = _required_text(value["provider"], "provider").lower()
         if provider not in _SUPPORTED_PROVIDERS:
-            raise RepairPRPublicationError(f"unsupported repair PR provider: {provider}")
+            raise RepairPRPublicationError(
+                f"unsupported repair PR provider: {provider}"
+            )
         return cls(
             provider=provider,
             repository=_required_text(value["repository"], "repository"),
-            repository_owner=_required_text(value["repository_owner"], "repository_owner"),
+            repository_owner=_required_text(
+                value["repository_owner"], "repository_owner"
+            ),
             title=_required_text(value["title"], "title"),
             body=_required_text(value["body"], "body"),
             branch=_required_text(value["branch"], "branch"),
@@ -115,7 +119,8 @@ class BitbucketRepairPRClient:
         _validate_owner_segment(workspace, "Bitbucket workspace")
         if (
             base_url is not None
-            and _owner_from_url(base_url, "BITBUCKET_URL").casefold() != workspace.casefold()
+            and _owner_from_url(base_url, "BITBUCKET_URL").casefold()
+            != workspace.casefold()
         ):
             raise RepairPRClientError("Bitbucket workspace differs from BITBUCKET_URL")
 
@@ -129,7 +134,9 @@ class BitbucketRepairPRClient:
             authorization = f"Bearer {self._fetch_oauth_token(oauth_key, token)}"
         else:
             authorization = f"Bearer {token}"
-        self.session.headers.update({"Accept": "application/json", "Authorization": authorization})
+        self.session.headers.update(
+            {"Accept": "application/json", "Authorization": authorization}
+        )
 
     @staticmethod
     def _fetch_oauth_token(consumer_key: str, consumer_secret: str) -> str:
@@ -154,7 +161,9 @@ class BitbucketRepairPRClient:
         )
         return _mapping_response(_response_json(response))
 
-    def list_pull_requests(self, repository: str, state: str) -> list[dict[str, object]]:
+    def list_pull_requests(
+        self, repository: str, state: str
+    ) -> list[dict[str, object]]:
         endpoint = f"/repositories/{self.workspace}/{repository}/pullrequests"
         values: list[dict[str, object]] = []
         url: str | None = f"{self.api_url}{endpoint}"
@@ -244,7 +253,9 @@ class GitHubRepairPRClient:
         )
         return _mapping_response(_response_json(response))
 
-    def list_pull_requests(self, repository: str, state: str) -> list[dict[str, object]]:
+    def list_pull_requests(
+        self, repository: str, state: str
+    ) -> list[dict[str, object]]:
         values: list[dict[str, object]] = []
         url: str | None = f"{self.api_url}/repos/{self.owner}/{repository}/pulls"
         params: dict[str, str | int] = {"state": state, "per_page": 100}
@@ -255,7 +266,9 @@ class GitHubRepairPRClient:
                 timeout=_REQUEST_TIMEOUT_SECONDS,
             )
             page = _response_json(response)
-            if not isinstance(page, list) or not all(isinstance(item, Mapping) for item in page):
+            if not isinstance(page, list) or not all(
+                isinstance(item, Mapping) for item in page
+            ):
                 raise requests.RequestException("GitHub returned an invalid PR page")
             values.extend(dict(item) for item in page)
             url = response.links.get("next", {}).get("url")
@@ -292,7 +305,9 @@ class GitHubRepairPRClient:
         )
 
 
-def publish_request(value: object, *, client: object | None = None) -> dict[str, object]:
+def publish_request(
+    value: object, *, client: object | None = None
+) -> dict[str, object]:
     """Publish a validated repair request and return a stable draft reference."""
     request = RepairPRRequest.from_mapping(value)
     return publish_or_reuse_draft(request, client=client).as_dict()
@@ -385,7 +400,9 @@ def _list_open_pull_requests(
             f"{request.provider} repair PR client does not implement list_pull_requests"
         )
     response = method(request.repository, _OPEN_STATES[request.provider])
-    if not isinstance(response, list) or not all(isinstance(item, Mapping) for item in response):
+    if not isinstance(response, list) or not all(
+        isinstance(item, Mapping) for item in response
+    ):
         raise RepairPRPublicationError(
             f"{request.provider} repair PR client returned an invalid PR list"
         )
@@ -443,7 +460,9 @@ def _source_repository_matches(
     )
 
 
-def _branches(record: Mapping[str, object], provider: str) -> tuple[str | None, str | None]:
+def _branches(
+    record: Mapping[str, object], provider: str
+) -> tuple[str | None, str | None]:
     if provider == "bitbucket":
         return (
             _nested_text(record, "source", "branch", "name"),
@@ -490,7 +509,9 @@ def _reference_from_record(
     identifier = _record_identifier(record, provider)
     url = _reference_url(record, provider)
     if identifier is None or url is None:
-        raise RepairPRPublicationError(f"{provider} response is missing a repair PR id or URL")
+        raise RepairPRPublicationError(
+            f"{provider} response is missing a repair PR id or URL"
+        )
     return RepairPRReference(id=identifier, url=url, reused=reused)
 
 
@@ -532,7 +553,9 @@ def _required_environment(*names: str) -> tuple[str, ...]:
     values = tuple(os.environ.get(name) for name in names)
     missing = [name for name, value in zip(names, values, strict=True) if not value]
     if missing:
-        raise RepairPRClientError(f"Missing required environment variables: {', '.join(missing)}")
+        raise RepairPRClientError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
     return tuple(value for value in values if value)
 
 

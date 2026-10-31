@@ -64,7 +64,9 @@ def _project_root(
     return project_root
 
 
-def _event(*, workspace: Path, tool_name: str, target: Path, **tool_input: str) -> dict[str, Any]:
+def _event(
+    *, workspace: Path, tool_name: str, target: Path, **tool_input: str
+) -> dict[str, Any]:
     return {
         "hook_event_name": "PreToolUse",
         "tool_name": tool_name,
@@ -75,7 +77,10 @@ def _event(*, workspace: Path, tool_name: str, target: Path, **tool_input: str) 
 
 
 def _run_hook(
-    event: dict[str, Any], *, workspace: Path, approved_read_paths: list[str] | None = None
+    event: dict[str, Any],
+    *,
+    workspace: Path,
+    approved_read_paths: list[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if UV_EXECUTABLE is None:
         pytest.fail("uv is required to exercise the registered file-access hook")
@@ -85,7 +90,9 @@ def _run_hook(
     environment["CLAUDE_PLUGIN_ROOT"] = str(PLUGIN_ROOT)
     environment.pop("PIPELINE_GUARD_APPROVED_READ_PATHS", None)
     if approved_read_paths is not None:
-        environment["PIPELINE_GUARD_APPROVED_READ_PATHS"] = json.dumps(approved_read_paths)
+        environment["PIPELINE_GUARD_APPROVED_READ_PATHS"] = json.dumps(
+            approved_read_paths
+        )
     command = [
         UV_EXECUTABLE,
         *[
@@ -105,7 +112,9 @@ def _run_hook(
     )
 
 
-def _dispatch_file_tool(event: dict[str, Any], *, workspace: Path) -> dict[str, Any] | None:
+def _dispatch_file_tool(
+    event: dict[str, Any], *, workspace: Path
+) -> dict[str, Any] | None:
     completed = _run_hook(event, workspace=workspace)
     assert completed.returncode == 0, completed.stderr
 
@@ -138,7 +147,9 @@ def _dispatch_read_tool(
     target: Path,
     approved_read_paths: list[str] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    completed = _run_hook(event, workspace=workspace, approved_read_paths=approved_read_paths)
+    completed = _run_hook(
+        event, workspace=workspace, approved_read_paths=approved_read_paths
+    )
     assert completed.returncode == 0, completed.stderr
 
     response = json.loads(completed.stdout) if completed.stdout.strip() else None
@@ -173,7 +184,10 @@ def test_registered_hook_blocks_out_of_allowlist_write_before_disk_change(
 
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "safety.editable_paths" in response["hookSpecificOutput"]["permissionDecisionReason"]
+    assert (
+        "safety.editable_paths"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
+    )
     assert target.read_bytes() == before
 
 
@@ -193,7 +207,9 @@ def test_registered_hook_allows_an_editable_write(tmp_path: Path) -> None:
     assert target.read_text(encoding="utf-8") == "# approved remediation\n"
 
 
-def test_registered_hook_blocks_sensitive_path_even_when_editable(tmp_path: Path) -> None:
+def test_registered_hook_blocks_sensitive_path_even_when_editable(
+    tmp_path: Path,
+) -> None:
     workspace = _project_root(tmp_path, editable_paths=["models/**/*.py"])
     target = workspace / "models" / "seeds" / "seed.py"
     target.parent.mkdir(parents=True)
@@ -210,7 +226,10 @@ def test_registered_hook_blocks_sensitive_path_even_when_editable(tmp_path: Path
 
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "safety.sensitive_paths" in response["hookSpecificOutput"]["permissionDecisionReason"]
+    assert (
+        "safety.sensitive_paths"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
+    )
     assert target.read_bytes() == before
 
 
@@ -244,7 +263,10 @@ def test_registered_hook_blocks_bare_sensitive_directories(
 
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "safety.sensitive_paths" in response["hookSpecificOutput"]["permissionDecisionReason"]
+    assert (
+        "safety.sensitive_paths"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
+    )
     assert not target.exists()
 
 
@@ -278,11 +300,16 @@ def test_registered_hook_blocks_descendants_of_sensitive_globs(
 
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "safety.sensitive_paths" in response["hookSpecificOutput"]["permissionDecisionReason"]
+    assert (
+        "safety.sensitive_paths"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
+    )
     assert not target.exists()
 
 
-def test_registered_hook_blocks_an_extension_not_in_the_allowlist(tmp_path: Path) -> None:
+def test_registered_hook_blocks_an_extension_not_in_the_allowlist(
+    tmp_path: Path,
+) -> None:
     workspace = _project_root(tmp_path, editable_paths=["src/**"])
     target = workspace / "src" / "readme.md"
     event = _event(
@@ -296,7 +323,10 @@ def test_registered_hook_blocks_an_extension_not_in_the_allowlist(tmp_path: Path
 
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "extension is not editable" in response["hookSpecificOutput"]["permissionDecisionReason"]
+    assert (
+        "extension is not editable"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
+    )
     assert not target.exists()
 
 
@@ -317,7 +347,9 @@ def test_registered_hook_blocks_targets_outside_the_workspace(tmp_path: Path) ->
     assert not target.exists()
 
 
-def test_registered_hook_fails_closed_when_project_config_is_missing(tmp_path: Path) -> None:
+def test_registered_hook_fails_closed_when_project_config_is_missing(
+    tmp_path: Path,
+) -> None:
     workspace = _project_root(tmp_path, editable_paths=["src/**/*.py"])
     (workspace / "config" / "pipeline-guard.yaml").unlink()
     target = workspace / "src" / "repair.py"
@@ -333,7 +365,8 @@ def test_registered_hook_fails_closed_when_project_config_is_missing(tmp_path: P
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert (
-        "policy could not be verified" in response["hookSpecificOutput"]["permissionDecisionReason"]
+        "policy could not be verified"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
     )
     assert not target.exists()
 
@@ -354,7 +387,8 @@ def test_registered_hook_protects_the_policy_config_it_reads(tmp_path: Path) -> 
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert (
-        "configuration is protected" in response["hookSpecificOutput"]["permissionDecisionReason"]
+        "configuration is protected"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
     )
     assert target.read_bytes() == before
 
@@ -377,7 +411,10 @@ def test_registered_hook_blocks_case_variant_sensitive_write(tmp_path: Path) -> 
 
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
-    assert "safety.sensitive_paths" in response["hookSpecificOutput"]["permissionDecisionReason"]
+    assert (
+        "safety.sensitive_paths"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
+    )
     assert canonical_target.read_bytes() == before
     if target.exists():
         assert target.samefile(canonical_target)
@@ -404,7 +441,8 @@ def test_registered_hook_protects_case_variant_policy_config(tmp_path: Path) -> 
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert (
-        "configuration is protected" in response["hookSpecificOutput"]["permissionDecisionReason"]
+        "configuration is protected"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
     )
     assert canonical_target.read_bytes() == before
     if target.exists():
@@ -414,7 +452,9 @@ def test_registered_hook_protects_case_variant_policy_config(tmp_path: Path) -> 
 def test_registered_hook_blocks_reads_outside_the_workspace(tmp_path: Path) -> None:
     workspace = _project_root(tmp_path, editable_paths=["src/**/*.py"])
     target = tmp_path / "outside.txt"
-    target.write_text("outside content must not enter the agent context\n", encoding="utf-8")
+    target.write_text(
+        "outside content must not enter the agent context\n", encoding="utf-8"
+    )
     event = _event(workspace=workspace, tool_name="Read", target=target)
 
     response, result = _dispatch_read_tool(
@@ -515,7 +555,9 @@ def test_registered_hook_blocks_common_secret_carrier_reads(
     assert result is None
 
 
-def test_registered_hook_blocks_read_without_a_caller_approved_scope(tmp_path: Path) -> None:
+def test_registered_hook_blocks_read_without_a_caller_approved_scope(
+    tmp_path: Path,
+) -> None:
     workspace = _project_root(tmp_path, editable_paths=["src/**/*.py"])
     target = workspace / "src" / "repair.py"
     target.parent.mkdir(parents=True)
@@ -527,7 +569,8 @@ def test_registered_hook_blocks_read_without_a_caller_approved_scope(tmp_path: P
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert (
-        "caller-approved read scope" in response["hookSpecificOutput"]["permissionDecisionReason"]
+        "caller-approved read scope"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
     )
     assert result is None
 
@@ -553,7 +596,8 @@ def test_registered_hook_blocks_workspace_read_outside_the_caller_scope(
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert (
-        "caller-approved read scope" in response["hookSpecificOutput"]["permissionDecisionReason"]
+        "caller-approved read scope"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
     )
     assert result is None
 
@@ -579,7 +623,8 @@ def test_registered_hook_rejects_non_exact_or_unsafe_caller_read_scope(
     assert response is not None
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
     assert (
-        "caller-approved read scope" in response["hookSpecificOutput"]["permissionDecisionReason"]
+        "caller-approved read scope"
+        in response["hookSpecificOutput"]["permissionDecisionReason"]
     )
     assert result is None
 

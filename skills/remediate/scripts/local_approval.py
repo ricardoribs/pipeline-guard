@@ -55,13 +55,17 @@ def record_local_approval(
 
     actor = _required_text(confirmation.get("actor"), "actor")
     incident_id = _required_text(confirmation.get("incident_id"), "incident_id")
-    diagnosis_hash = _required_text(confirmation.get("diagnosis_hash"), "diagnosis_hash")
+    diagnosis_hash = _required_text(
+        confirmation.get("diagnosis_hash"), "diagnosis_hash"
+    )
     base_commit = _required_text(confirmation.get("base_commit"), "base_commit")
     confirmed_at = _required_text(confirmation.get("confirmed_at"), "confirmed_at")
     nonce = _required_text(confirmation.get("nonce"), "nonce")
     source_reference = _required_text(confirmation_reference, "confirmation_reference")
     if re.fullmatch(r"[0-9a-f]{64}", nonce) is None:
-        raise LocalApprovalError("nonce must contain exactly 64 lowercase hexadecimal characters")
+        raise LocalApprovalError(
+            "nonce must contain exactly 64 lowercase hexadecimal characters"
+        )
     now = current_time if current_time is not None else datetime.now(UTC)
     if not isinstance(now, datetime) or now.utcoffset() is None:
         raise LocalApprovalError("current_time must be a timezone-aware datetime")
@@ -94,7 +98,9 @@ def record_local_approval(
         )
     data_dir = Path(plugin_data_dir).expanduser()
     if not data_dir.is_absolute():
-        raise LocalApprovalError("plugin_data_dir or CLAUDE_PLUGIN_DATA must be an absolute path")
+        raise LocalApprovalError(
+            "plugin_data_dir or CLAUDE_PLUGIN_DATA must be an absolute path"
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _consume_nonce(nonce, data_dir)
@@ -132,13 +138,19 @@ def _approval_lifetime(value: str) -> timedelta:
             raise ValueError
         return timedelta(seconds=seconds)
     except (ValueError, OverflowError) as error:
-        raise argparse.ArgumentTypeError("max-age-seconds must be a positive integer") from error
+        raise argparse.ArgumentTypeError(
+            "max-age-seconds must be a positive integer"
+        ) from error
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("confirmation", type=Path, help="UTF-8 JSON confirmation from the skill")
-    parser.add_argument("--output", type=Path, required=True, help="New local approval JSON file")
+    parser.add_argument(
+        "confirmation", type=Path, help="UTF-8 JSON confirmation from the skill"
+    )
+    parser.add_argument(
+        "--output", type=Path, required=True, help="New local approval JSON file"
+    )
     parser.add_argument("--max-age-seconds", type=_approval_lifetime, required=True)
     parser.add_argument(
         "--plugin-data-dir",

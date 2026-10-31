@@ -66,7 +66,9 @@ def _config(**eligibility_overrides: object) -> dict[str, Any]:
 
 
 def _validate_decision(decision: dict[str, Any]) -> None:
-    schema_path = PLUGIN_ROOT / "contracts" / "schema" / "eligibility_decision_v1.schema.json"
+    schema_path = (
+        PLUGIN_ROOT / "contracts" / "schema" / "eligibility_decision_v1.schema.json"
+    )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     Draft202012Validator(schema).validate(decision)
 

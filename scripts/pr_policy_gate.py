@@ -34,7 +34,10 @@ def decide_pr_publication(
     This function is deliberately independent of PR transport.  A caller must
     not invoke a Git-hosting integration when the result is ``BLOCKED``.
     """
-    if not isinstance(validation_status, str) or validation_status not in _VALIDATION_STATUSES:
+    if (
+        not isinstance(validation_status, str)
+        or validation_status not in _VALIDATION_STATUSES
+    ):
         raise PRPolicyGateError("validation_status is invalid")
     if type(allow_unvalidated_draft) is not bool:
         raise PRPolicyGateError("allow_unvalidated_draft must be a boolean")

@@ -19,21 +19,23 @@ from referencing import Registry, Resource
 from .base import EvidenceProvider
 
 _PLUGIN_ROOT = Path(__file__).resolve().parents[2]
-_CREDENTIAL_SCHEMA_ID = (
-    "urn:pipeline-guard:credential-reference.schema.json"
-)
+_CREDENTIAL_SCHEMA_ID = "urn:pipeline-guard:credential-reference.schema.json"
 _CREDENTIAL_PROPERTY = re.compile(
     r"(?:credential|secret|token|password|passwd|pwd|api[_-]?key|access[_-]?key|"
     r"private[_-]?key|client[_-]?secret)",
     re.IGNORECASE,
 )
-_CREDENTIAL_SCHEMA_PATH = _PLUGIN_ROOT / "config" / "schema" / "credential-reference.schema.json"
+_CREDENTIAL_SCHEMA_PATH = (
+    _PLUGIN_ROOT / "config" / "schema" / "credential-reference.schema.json"
+)
 
 
 def _load_schema_registry() -> Registry:
     """Build a local-only JSON Schema registry for shared definitions."""
     try:
-        credential_schema = json.loads(_CREDENTIAL_SCHEMA_PATH.read_text(encoding="utf-8"))
+        credential_schema = json.loads(
+            _CREDENTIAL_SCHEMA_PATH.read_text(encoding="utf-8")
+        )
     except (OSError, json.JSONDecodeError) as exc:
         raise EvidenceProviderRegistryError(
             f"Cannot load shared credential reference schema {_CREDENTIAL_SCHEMA_PATH}: {exc}"
@@ -44,7 +46,9 @@ def _load_schema_registry() -> Registry:
         raise EvidenceProviderRegistryError(
             f"Credential reference schema must use the stable ID {_CREDENTIAL_SCHEMA_ID!r}."
         )
-    return Registry().with_resource(schema_id, Resource.from_contents(credential_schema))
+    return Registry().with_resource(
+        schema_id, Resource.from_contents(credential_schema)
+    )
 
 
 class EvidenceProviderRegistryError(ValueError):
@@ -66,7 +70,9 @@ class EvidenceProviderRegistry:
         validated_entries: dict[str, EvidenceProviderRegistration] = {}
         for provider_type, registration in entries.items():
             if not provider_type or not provider_type.strip():
-                raise EvidenceProviderRegistryError("Provider type names must not be empty.")
+                raise EvidenceProviderRegistryError(
+                    "Provider type names must not be empty."
+                )
             if not isinstance(registration, EvidenceProviderRegistration):
                 raise EvidenceProviderRegistryError(
                     f"Provider {provider_type!r} must have an implementation and schema entry."
@@ -108,15 +114,17 @@ class EvidenceProviderRegistry:
         self._schema_registry = _load_schema_registry()
 
     @staticmethod
-    def _require_closed_object_schemas(provider_type: str, schema: Mapping[str, Any]) -> None:
+    def _require_closed_object_schemas(
+        provider_type: str, schema: Mapping[str, Any]
+    ) -> None:
         """Require every declared object shape to reject undeclared properties."""
         pending: list[Any] = [schema]
         while pending:
             current = pending.pop()
             if isinstance(current, dict):
-                if (current.get("type") == "object" or "properties" in current) and current.get(
-                    "additionalProperties"
-                ) is not False:
+                if (
+                    current.get("type") == "object" or "properties" in current
+                ) and current.get("additionalProperties") is not False:
                     raise EvidenceProviderRegistryError(
                         f"Provider {provider_type!r} schema must set "
                         "additionalProperties: false on every object."
@@ -126,7 +134,9 @@ class EvidenceProviderRegistry:
                 pending.extend(current)
 
     @staticmethod
-    def _require_credential_reference_schemas(provider_type: str, schema: dict[str, Any]) -> None:
+    def _require_credential_reference_schemas(
+        provider_type: str, schema: dict[str, Any]
+    ) -> None:
         """Require named or annotated credential fields to use the shared schema."""
 
         def resolves_to_credential_schema(candidate: Any, seen: set[str]) -> bool:
@@ -160,9 +170,9 @@ class EvidenceProviderRegistry:
                             isinstance(property_schema, dict)
                             and property_schema.get("x-credential-reference") is True
                         )
-                        if (is_credential or is_annotated) and not resolves_to_credential_schema(
-                            property_schema, set()
-                        ):
+                        if (
+                            is_credential or is_annotated
+                        ) and not resolves_to_credential_schema(property_schema, set()):
                             raise EvidenceProviderRegistryError(
                                 f"Provider {provider_type!r} credential field {property_name!r} "
                                 "must reference the shared credential-reference schema."
