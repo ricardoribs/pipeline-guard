@@ -368,8 +368,15 @@ def _workspace_git_text(
     action: str,
 ) -> str:
     try:
-        completed = subprocess.run(
-            ["git", "-C", str(workspace_path), "-c", "core.longpaths=true", *arguments],
+        completed = subprocess.run(  # noqa: S603
+            [  # noqa: S607
+                "git",
+                "-C",
+                str(workspace_path),
+                "-c",
+                "core.longpaths=true",
+                *arguments,
+            ],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,

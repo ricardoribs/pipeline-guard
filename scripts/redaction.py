@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-REDACTED_SECRET = "[REDACTED_SECRET]"
+REDACTED_SECRET = "[REDACTED_SECRET]"  # noqa: S105
 REDACTED_EMAIL = "[REDACTED_EMAIL]"
 REDACTED_PRIVATE_KEY = "[REDACTED_PRIVATE_KEY]"
 
@@ -44,7 +44,7 @@ _SENSITIVE_FIELDS = frozenset(
 )
 
 _SECRET_LABEL_BASE = (
-    r"account[\t _-]*key|api[\t _-]*key|access[\t _-]*token|"
+    r"account[\t _-]*key|api[\t _-]*key|access[\t _-]*token|"  # noqa: S105
     r"auth[\t _-]*token|bearer[\t _-]*token|auth|"
     r"cookie|set[\t _-]*cookie|session[\t _-]*(?:cookie|id|token)|"
     r"shared[\t _-]*access[\t _-]*signature|"

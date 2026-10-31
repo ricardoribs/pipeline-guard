@@ -460,7 +460,7 @@ def _reject_parent_inside_worktree(parent_dir: Path | None) -> None:
     }
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
+            ["git", "rev-parse", "--show-toplevel"],  # noqa: S607
             cwd=parent_dir,
             env=env,
             stdin=subprocess.DEVNULL,
@@ -1719,7 +1719,7 @@ def _run_git_command(
     job = _WindowsProcessJob() if os.name == "nt" else None
     process = None
     try:
-        process = subprocess.Popen(
+        process = subprocess.Popen(  # noqa: S603
             [sys.executable, "-I", "-c", supervisor, *command],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE if capture_stdout else subprocess.DEVNULL,
@@ -1879,8 +1879,8 @@ def _validate_branch_name(branch: str, field: str) -> None:
             "provide the base branch name without checkout shorthand or control characters",
         )
     try:
-        completed = subprocess.run(
-            ["git", "check-ref-format", "--branch", branch],
+        completed = subprocess.run(  # noqa: S603
+            ["git", "check-ref-format", "--branch", branch],  # noqa: S607
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

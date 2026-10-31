@@ -10,6 +10,7 @@ __pycache__/
 .coverage
 .coverage.*
 htmlcov/
+/test-results/
 
 # Local Python environments and build output
 .venv/

@@ -139,7 +139,8 @@ class TestExecutor:
 
             log_text = ""
             start = time.monotonic()
-            proc = subprocess.Popen(
+            # Configured shell strings preserve project-owned validation commands.
+            proc = subprocess.Popen(  # noqa: S602
                 command,
                 shell=True,
                 stdout=subprocess.PIPE,

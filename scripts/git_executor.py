@@ -946,8 +946,15 @@ def _git_bytes(
     action: str,
 ) -> subprocess.CompletedProcess[bytes]:
     try:
-        completed = subprocess.run(
-            ["git", "-C", str(workspace.path), "-c", "core.longpaths=true", *arguments],
+        completed = subprocess.run(  # noqa: S603
+            [  # noqa: S607
+                "git",
+                "-C",
+                str(workspace.path),
+                "-c",
+                "core.longpaths=true",
+                *arguments,
+            ],
             check=False,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,

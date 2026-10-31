@@ -2,7 +2,7 @@
   "name": "pipeline-guard",
   "version": "1.0.0",
   "description": "Diagnoses pipeline failures from traceable evidence and produces tested remediations as draft pull requests after verified approval.",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "commands": [],
   "agents": [
     "./agents/diagnosis-agent.md",

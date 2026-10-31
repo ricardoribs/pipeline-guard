@@ -2,8 +2,10 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -13,11 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Tests and quality checks
+  tests:
+    name: Tests and deterministic-gate coverage
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -27,20 +28,109 @@ jobs:
         with:
           version: "0.13.6"
           python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
-      - name: Run offline test suite
-        run: >-
-          uv run --python 3.12
-          --with pytest
-          --with anthropic
-          --with jsonschema
-          --with pyyaml
-          --with requests
-          --with httpx
-          pytest -m "not api" tests/pipeline-guard tests/specs -q
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev --python 3.12
+
+      - name: Run offline tests and collect deterministic-gate coverage
+        run: |
+          mkdir -p test-results
+          uv run pytest -m "not api" tests/pipeline-guard tests/specs -q \
+            --junitxml=test-results/junit.xml \
+            --cov=scripts.eligibility_gate \
+            --cov=scripts.approval_validator \
+            --cov=scripts.approval_authenticator \
+            --cov=scripts.patch_validator \
+            --cov=scripts.workspace_executor \
+            --cov-report=term-missing \
+            --cov-report=xml:test-results/coverage.xml \
+            --cov-fail-under=80
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-reports
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  quality:
+    name: Type-check and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev --python 3.12
+
+      - name: Type-check Python
+        run: uv run basedpyright
 
       - name: Check Python formatting
-        run: uv run --python 3.12 --with ruff ruff format --check .
+        run: uv run ruff format --check .
 
       - name: Lint Python
-        run: uv run --python 3.12 --with ruff ruff check .
+        run: uv run ruff check .
+
+  contracts:
+    name: Config and contract validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install locked dependencies
+        run: uv sync --locked --group dev --python 3.12
+
+      - name: Validate presets, project configs, and plugin manifests
+        run: uv run python -m scripts.validate_repository_assets
+
+      - name: Check incident schema backward compatibility
+        env:
+          SCHEMA_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'origin/main' }}
+        run: |
+          git show "${SCHEMA_BASE_REF}:contracts/schema/incident_input_v1.schema.json" \
+            > "${RUNNER_TEMP}/incident_input_v1.base.schema.json"
+          uv run python scripts/check_schema_compatibility.py \
+            "${RUNNER_TEMP}/incident_input_v1.base.schema.json" \
+            contracts/schema/incident_input_v1.schema.json
+
+  secrets:
+    name: Scan Git history for secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Scan history with Gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false"

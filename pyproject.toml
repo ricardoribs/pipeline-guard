@@ -1,0 +1,69 @@
+[project]
+name = "pipeline-guard"
+version = "1.0.0"
+description = "Evidence-based pipeline diagnosis and safely approved remediation."
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Ricardo" }]
+dependencies = [
+    "anthropic",
+    "httpx",
+    "jsonschema",
+    "pyyaml",
+    "requests",
+]
+
+[dependency-groups]
+dev = [
+    "basedpyright",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "types-PyYAML",
+    "types-requests",
+]
+
+[tool.uv]
+package = false
+
+[tool.basedpyright]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+include = [
+    "adapters",
+    "agents",
+    "config",
+    "contracts",
+    "hooks",
+    "scripts",
+    "skills/remediate/scripts",
+]
+exclude = [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "**/reports",
+]
+extraPaths = ["."]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+markers = [
+    "api: tests that call an external model API and require credentials",
+    "slow: long-running integration tests",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["E501", "S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E402", "S"]
+"scripts/diagnose_cli.py" = ["E402"]
+"scripts/workspace_executor.py" = ["E402"]
+"skills/remediate/scripts/local_approval.py" = ["E402"]
