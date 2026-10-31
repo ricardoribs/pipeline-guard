@@ -12,7 +12,7 @@ from jsonschema import Draft202012Validator
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.diagnosis_validator import (  # noqa: E402
+from scripts.diagnosis_validator import (
     DiagnosisValidationError,
     validate_diagnosis,
 )

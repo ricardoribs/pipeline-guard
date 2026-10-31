@@ -11,9 +11,9 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.diagnose_cli import run_diagnosis  # noqa: E402
-from scripts.execution_budget import ExecutionBudget, ExecutionBudgetExceeded  # noqa: E402
-from scripts.validate_config import validate_config  # noqa: E402
+from scripts.diagnose_cli import run_diagnosis
+from scripts.execution_budget import ExecutionBudget, ExecutionBudgetExceeded
+from scripts.validate_config import validate_config
 
 sys.path.remove(str(PLUGIN_ROOT))
 

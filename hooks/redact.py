@@ -79,7 +79,7 @@ def _is_diagnosis_prompt(prompt: str) -> bool:
 def _guard_user_prompt(event: Mapping[str, Any]) -> dict[str, Any] | None:
     prompt = event.get("prompt")
     if not isinstance(prompt, str):
-        raise ValueError("hook event prompt must be a string")
+        raise TypeError("hook event prompt must be a string")
     if not _is_diagnosis_prompt(prompt) or redact_text(prompt) == prompt:
         return None
 
@@ -100,7 +100,7 @@ def _guard_user_prompt(event: Mapping[str, Any]) -> dict[str, Any] | None:
 def redact_hook_event(event: object) -> dict[str, Any] | None:
     """Protect a diagnosis-bound prompt or return sanitized tool input."""
     if not isinstance(event, Mapping):
-        raise ValueError("hook event must be a JSON object")
+        raise TypeError("hook event must be a JSON object")
 
     hook_event_name = event.get("hook_event_name")
     if hook_event_name == "UserPromptSubmit":
@@ -110,7 +110,7 @@ def redact_hook_event(event: object) -> dict[str, Any] | None:
 
     tool_input = event.get("tool_input")
     if not isinstance(tool_input, Mapping):
-        raise ValueError("hook event tool_input must be a JSON object")
+        raise TypeError("hook event tool_input must be a JSON object")
 
     tool_name = event.get("tool_name")
     if not (

@@ -59,8 +59,10 @@ def test_profile_has_no_execution_or_external_side_effect_tools() -> None:
         "You have no terminal or network tools",
         "perform Git operations, create commits, push branches, open pull requests",
         "query or write to a warehouse, database, pipeline platform, or other external service",
-        "The test executor, patch validator, Git executor, and pull-request integration "
-        "are separate controls",
+        (
+            "The test executor, patch validator, Git executor, and pull-request integration "
+            "are separate controls"
+        ),
     )
     for rule in required_rules:
         assert rule in normalized_body

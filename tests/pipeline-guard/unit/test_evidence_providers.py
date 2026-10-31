@@ -11,7 +11,7 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from adapters.evidence import (  # noqa: E402
+from adapters.evidence import (
     EvidenceCapability,
     EvidencePayload,
     QueryExecutionGuarantees,

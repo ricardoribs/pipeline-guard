@@ -31,24 +31,24 @@ if str(PLUGIN_ROOT) not in sys.path:
 
 # These runtime imports must follow sys.path injection; Ruff versions classify them differently.
 # isort: off
-from adapters.registry import build_default_registry  # noqa: E402
-from scripts.artifact_store import LocalArtifactStore  # noqa: E402
-from scripts.diagnosis_validator import validate_diagnosis  # noqa: E402
-from scripts.eligibility_gate import evaluate_eligibility  # noqa: E402
-from scripts.execution_budget import ExecutionBudget, ExecutionBudgetExceeded  # noqa: E402
-from scripts.incident_validator import (  # noqa: E402
+from adapters.registry import build_default_registry
+from scripts.artifact_store import LocalArtifactStore
+from scripts.diagnosis_validator import validate_diagnosis
+from scripts.eligibility_gate import evaluate_eligibility
+from scripts.execution_budget import ExecutionBudget, ExecutionBudgetExceeded
+from scripts.incident_validator import (
     IncidentValidationError,
     validate_incident_input,
 )
-from scripts.redaction import redact_payload  # noqa: E402
-from scripts.report_renderer import render_report  # noqa: E402
-from scripts.run_manifest import (  # noqa: E402
+from scripts.redaction import redact_payload
+from scripts.report_renderer import render_report
+from scripts.run_manifest import (
     build_run_manifest,
     derive_manifest_run_id,
     load_run_manifest,
     persist_run_manifest,
 )
-from scripts.validate_config import ConfigValidationError, validate_config  # noqa: E402
+from scripts.validate_config import ConfigValidationError, validate_config
 # isort: on
 
 AGENT_PATH = Path(__file__).resolve().parents[1] / "agents" / "diagnosis-agent.md"
@@ -422,7 +422,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             limitations=result["diagnosis"].get("limitations", []),
         )
         persist_run_manifest(manifest, artifact_store=store)
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001
         # SDK/source/persistence failures are operational errors, not invalid incidents.
         # Do not echo provider responses, credentials or evidence into stderr.
         print(f"Diagnosis failed: {type(error).__name__}", file=sys.stderr)

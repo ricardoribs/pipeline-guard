@@ -13,8 +13,8 @@ import yaml
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-import scripts.unattended_preflight as unattended_preflight  # noqa: E402
-from scripts.unattended_preflight import (  # noqa: E402
+from scripts import unattended_preflight
+from scripts.unattended_preflight import (
     UnattendedPreflightError,
     run_preflight,
 )

@@ -11,14 +11,14 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-import scripts.authoring_runner as authoring_runner  # noqa: E402
-from scripts.authoring_runner import (  # noqa: E402
+from scripts import authoring_runner
+from scripts.authoring_runner import (
     AuthoringLimitReached,
     AuthoringRunnerConfigurationError,
     AuthoringRunnerError,
     run_authoring,
 )
-from scripts.execution_budget import ExecutionBudget  # noqa: E402
+from scripts.execution_budget import ExecutionBudget
 
 sys.path.remove(str(PLUGIN_ROOT))
 

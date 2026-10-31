@@ -38,7 +38,7 @@ _PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 if str(_PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(_PLUGIN_ROOT))
 
-from scripts.validate_config import validate_config  # noqa: E402
+from scripts.validate_config import validate_config
 
 _CLONE_TIMEOUT_SECONDS = 120
 _WORKSPACE_GIT_TIMEOUT_SECONDS = 30
@@ -343,7 +343,7 @@ class ClonedWorkspace:
             return
         try:
             self.close()
-        except Exception as cleanup_exc:
+        except Exception as cleanup_exc:  # noqa: BLE001
             exception.add_note(f"cleanup also failed: {cleanup_exc}")
 
     def close(self) -> None:
@@ -494,16 +494,11 @@ def _retained_workspace_directory(inputs: WorkspaceInput, parent_dir: Path) -> P
         + "\\"
         + os.environ.get("USERNAME", "")
     )
-    key = hashlib.sha256(
-        "\0".join(
-            (
-                identity,
-                inputs.repository_url,
-                inputs.base_branch,
-                inputs.incident_branch,
-            )
-        ).encode("utf-8")
-    ).hexdigest()[:32]
+    key_material = (
+        f"{identity}\0{inputs.repository_url}\0"
+        f"{inputs.base_branch}\0{inputs.incident_branch}"
+    )
+    key = hashlib.sha256(key_material.encode("utf-8")).hexdigest()[:32]
     workspace_dir = parent / f".pipeline-guard-{key}"
     if workspace_dir.is_symlink():
         raise WorkspaceExecutionError(
@@ -852,13 +847,13 @@ def clone_workspace(
         )
         try:
             workspace.close()
-        except Exception as cleanup_exc:
+        except Exception as cleanup_exc:  # noqa: BLE001
             error.add_note(f"cleanup also failed: {cleanup_exc}")
         raise error from None
     except BaseException as exc:
         try:
             workspace.close()
-        except Exception as cleanup_exc:
+        except Exception as cleanup_exc:  # noqa: BLE001
             exc.add_note(f"cleanup also failed: {cleanup_exc}")
         raise
     return workspace
@@ -920,7 +915,7 @@ def prepare_workspace(
     except BaseException as exc:
         try:
             claim.release()
-        except Exception as cleanup_exc:
+        except Exception as cleanup_exc:  # noqa: BLE001
             exc.add_note(f"claim cleanup also failed: {cleanup_exc}")
         raise
     if not reused:
@@ -932,13 +927,13 @@ def prepare_workspace(
             )
             try:
                 workspace.discard()
-            except Exception as cleanup_exc:
+            except Exception as cleanup_exc:  # noqa: BLE001
                 error.add_note(f"cleanup also failed: {cleanup_exc}")
             raise error from None
         except BaseException as exc:
             try:
                 workspace.discard()
-            except Exception as cleanup_exc:
+            except Exception as cleanup_exc:  # noqa: BLE001
                 exc.add_note(f"cleanup also failed: {cleanup_exc}")
             raise
     try:
@@ -1061,12 +1056,12 @@ def prepare_workspace(
                 workspace.close()
             else:
                 workspace.discard()
-        except Exception as cleanup_exc:
+        except Exception as cleanup_exc:  # noqa: BLE001
             exc.add_note(f"cleanup also failed: {cleanup_exc}")
         finally:
             try:
                 workspace._release_claim()
-            except Exception as cleanup_exc:
+            except Exception as cleanup_exc:  # noqa: BLE001
                 exc.add_note(f"claim cleanup also failed: {cleanup_exc}")
         raise
     return workspace

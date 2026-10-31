@@ -16,8 +16,8 @@ PRESETS_DIR = PLUGIN_ROOT / "config" / "presets"
 PROJECTS_DIR = PLUGIN_ROOT / "config" / "projects"
 
 sys.path.insert(0, str(PLUGIN_ROOT))
-from adapters.evidence.base import EvidenceCapability, EvidencePayload  # noqa: E402
-from adapters.evidence.registry import (  # noqa: E402
+from adapters.evidence.base import EvidenceCapability, EvidencePayload
+from adapters.evidence.registry import (
     EVIDENCE_PROVIDER_REGISTRY,
     EvidenceProviderRegistration,
     EvidenceProviderRegistry,

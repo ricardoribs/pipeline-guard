@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts.draft_pr_publisher import publish_request as publish_draft_pr_request
 from scripts.git_executor import (
     isolated_push_environment,
     resolve_push_credential,
@@ -26,7 +27,6 @@ from scripts.git_executor import (
 )
 from scripts.pr_policy_gate import PRPolicyDecision, decide_pr_publication
 from scripts.pr_request_builder import PRRequest
-from scripts.draft_pr_publisher import publish_request as publish_draft_pr_request
 from scripts.test_executor import CommandResult, TestExecutor, TestExecutorResult
 from scripts.validate_config import validate_config
 

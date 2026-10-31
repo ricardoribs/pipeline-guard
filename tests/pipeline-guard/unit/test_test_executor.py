@@ -420,11 +420,8 @@ def test_two_executor_instances_same_run_id_get_distinct_log_refs(monkeypatch):
 
 
 def test_non_utf8_output_is_tolerated_and_next_command_still_runs():
-    bad_bytes_command = " ".join(
-        (
-            'python3 -c "import sys;',
-            "sys.stdout.buffer.write(b'\\xff\\xfe bad')\"",
-        )
+    bad_bytes_command = (
+        "python3 -c \"import sys; sys.stdout.buffer.write(b'\\xff\\xfe bad')\""
     )
     config = {
         "validation": {

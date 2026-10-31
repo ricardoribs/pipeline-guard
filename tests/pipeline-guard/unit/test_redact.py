@@ -12,7 +12,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 HOOKS_ROOT = PLUGIN_ROOT / "hooks"
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.redaction import (  # noqa: E402
+from scripts.redaction import (
     REDACTED_EMAIL,
     REDACTED_PRIVATE_KEY,
     REDACTED_SECRET,
@@ -357,10 +357,14 @@ def test_redact_text_masks_authentication_context(source: str, expected: str) ->
             REDACTED_SECRET,
         ),
         (
-            "https://example.blob.core.windows.net/container/file?sv=2023-11-03"
-            "&sig=synthetic%2Bsignature%2Fvalue%3D&sp=r",
-            "https://example.blob.core.windows.net/container/file?sv=2023-11-03"
-            f"&sig={REDACTED_SECRET}&sp=r",
+            (
+                "https://example.blob.core.windows.net/container/file?sv=2023-11-03"
+                "&sig=synthetic%2Bsignature%2Fvalue%3D&sp=r"
+            ),
+            (
+                "https://example.blob.core.windows.net/container/file?sv=2023-11-03"
+                f"&sig={REDACTED_SECRET}&sp=r"
+            ),
         ),
         (
             "https://storage.example.com/file?sig=synthetic-signature&sp=r#section",
@@ -368,8 +372,10 @@ def test_redact_text_masks_authentication_context(source: str, expected: str) ->
         ),
         (
             "https://example.blob.core.windows.net/file?SIG=first&sig=second",
-            f"https://example.blob.core.windows.net/file?SIG={REDACTED_SECRET}"
-            f"&sig={REDACTED_SECRET}",
+            (
+                f"https://example.blob.core.windows.net/file?SIG={REDACTED_SECRET}"
+                f"&sig={REDACTED_SECRET}"
+            ),
         ),
         (
             '"https://example.blob.core.windows.net/file?sig=synthetic-signature"',

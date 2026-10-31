@@ -13,8 +13,8 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.diagnose_cli import DiagnosisRunner  # noqa: E402
-from scripts.execution_budget import ExecutionBudget, ExecutionBudgetExceeded  # noqa: E402
+from scripts.diagnose_cli import DiagnosisRunner
+from scripts.execution_budget import ExecutionBudget, ExecutionBudgetExceeded
 
 sys.path.remove(str(PLUGIN_ROOT))
 

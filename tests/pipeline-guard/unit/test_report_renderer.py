@@ -12,7 +12,7 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.report_renderer import (  # noqa: E402
+from scripts.report_renderer import (
     ReportRenderingError,
     main,
     render_report,

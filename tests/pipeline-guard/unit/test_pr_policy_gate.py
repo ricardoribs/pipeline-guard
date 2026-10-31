@@ -11,7 +11,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.pr_policy_gate import PRPolicyGateError, decide_pr_publication  # noqa: E402
+from scripts.pr_policy_gate import PRPolicyGateError, decide_pr_publication
 
 
 def test_all_passed_is_always_validated() -> None:

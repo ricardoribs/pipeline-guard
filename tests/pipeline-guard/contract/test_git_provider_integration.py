@@ -16,21 +16,23 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
-import scripts.draft_pr_publisher as draft_pr_publisher  # noqa: E402
-from scripts.pr_publication import (  # noqa: E402
-    PipelineGuardDraftPRPublisher,
-    PushedIncidentBranch,
-    publish_draft_pr,
-)
-from scripts.pr_request_builder import PRRequest  # noqa: E402
-from scripts.draft_pr_publisher import (  # noqa: E402
+from scripts import draft_pr_publisher
+from scripts.draft_pr_publisher import (
     BitbucketRepairPRClient,
     GitHubRepairPRClient,
     RepairPRPublicationError,
     publish_request,
 )
-from scripts.test_executor import (  # noqa: E402
+from scripts.pr_publication import (
+    PipelineGuardDraftPRPublisher,
+    PushedIncidentBranch,
+    publish_draft_pr,
+)
+from scripts.pr_request_builder import PRRequest
+from scripts.test_executor import (
     CommandResult,
+)
+from scripts.test_executor import (
     TestExecutorResult as ValidationExecutionResult,
 )
 

@@ -18,9 +18,9 @@ sys.path.insert(0, str(PLUGIN_ROOT))
 
 # These runtime imports must follow sys.path injection; Ruff versions classify them differently.
 # isort: off
-from scripts.artifact_store import LocalArtifactStore  # noqa: E402
-from scripts.redaction import redact_payload  # noqa: E402
-from scripts.run_manifest import (  # noqa: E402
+from scripts.artifact_store import LocalArtifactStore
+from scripts.redaction import redact_payload
+from scripts.run_manifest import (
     RunManifestConflictError,
     RunManifestError,
     build_run_manifest,

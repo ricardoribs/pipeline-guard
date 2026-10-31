@@ -12,7 +12,7 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.approval_authenticator import (  # noqa: E402
+from scripts.approval_authenticator import (
     ApprovalAuthenticationError,
     verify_orchestrated_approval,
 )

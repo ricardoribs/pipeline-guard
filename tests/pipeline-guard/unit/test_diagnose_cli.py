@@ -223,10 +223,10 @@ def _valid_incident() -> dict:
 
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-import scripts.diagnose_cli as diagnose_cli  # noqa: E402
-from scripts.artifact_store import LocalArtifactStore  # noqa: E402
-from scripts.run_manifest import derive_manifest_run_id, load_run_manifest  # noqa: E402
-from scripts.validate_config import validate_config  # noqa: E402
+from scripts import diagnose_cli
+from scripts.artifact_store import LocalArtifactStore
+from scripts.run_manifest import derive_manifest_run_id, load_run_manifest
+from scripts.validate_config import validate_config
 
 sys.path.remove(str(PLUGIN_ROOT))
 

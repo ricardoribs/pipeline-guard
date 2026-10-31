@@ -10,12 +10,12 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.pr_request_builder import (  # noqa: E402
+from scripts.pr_request_builder import (
     PRRequest,
     PRRequestBuilderError,
     build_pr_request,
 )
-from scripts.test_executor import CommandResult, TestExecutorResult  # noqa: E402
+from scripts.test_executor import CommandResult, TestExecutorResult
 
 sys.path.remove(str(PLUGIN_ROOT))
 

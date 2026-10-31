@@ -12,12 +12,12 @@ from jsonschema import Draft202012Validator
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.execution_budget import (  # noqa: E402
+from scripts.execution_budget import (
     ExecutionBudget,
     ExecutionBudgetConfigurationError,
     ExecutionBudgetExceeded,
 )
-from scripts.validate_config import ConfigValidationError, validate_config  # noqa: E402
+from scripts.validate_config import ConfigValidationError, validate_config
 
 sys.path.remove(str(PLUGIN_ROOT))
 

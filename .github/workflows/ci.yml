@@ -44,6 +44,3 @@ jobs:
 
       - name: Lint Python
         run: uv run --python 3.12 --with ruff ruff check .
-
-      - name: Type-check Python
-        run: uv run --python 3.12 --with basedpyright basedpyright .

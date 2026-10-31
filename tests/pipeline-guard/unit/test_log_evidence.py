@@ -13,15 +13,15 @@ sys.path.insert(0, str(PLUGIN_ROOT))
 
 # These runtime imports must follow sys.path injection; Ruff versions classify them differently.
 # isort: off
-from adapters.evidence import (  # noqa: E402
+from adapters.evidence import (
     EvidenceCapability,
     EvidencePayload,
     LargeLogPolicy,
     LargeLogProcessingError,
     collect_if_supported,
 )
-from adapters.evidence.logs import LogArtifactStore  # noqa: E402
-from scripts.artifact_store import LocalArtifactStore  # noqa: E402
+from adapters.evidence.logs import LogArtifactStore
+from scripts.artifact_store import LocalArtifactStore
 # isort: on
 
 sys.path.remove(str(PLUGIN_ROOT))

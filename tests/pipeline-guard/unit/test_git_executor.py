@@ -14,10 +14,10 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
-from typing import Any  # noqa: E402
+from typing import Any
 
-import scripts.git_executor as git_executor  # noqa: E402
-from scripts.git_executor import (  # noqa: E402
+from scripts import git_executor
+from scripts.git_executor import (
     GitExecutorError,
     GitExecutorValidationError,
     RemediationResultValidationError,
@@ -26,13 +26,15 @@ from scripts.git_executor import (  # noqa: E402
     resolve_push_credential,
     validate_remediation_git_configuration,
 )
-from scripts.patch_validator import validate_patch  # noqa: E402
-from scripts.pr_policy_gate import decide_pr_publication  # noqa: E402
-from scripts.test_executor import (  # noqa: E402
+from scripts.patch_validator import validate_patch
+from scripts.pr_policy_gate import decide_pr_publication
+from scripts.test_executor import (
     CommandResult,
+)
+from scripts.test_executor import (
     TestExecutorResult as ValidationExecutionResult,
 )
-from scripts.workspace_executor import (  # noqa: E402
+from scripts.workspace_executor import (
     ClonedWorkspace,
     WorkspaceInput,
     prepare_workspace,

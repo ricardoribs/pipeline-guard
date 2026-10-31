@@ -11,8 +11,8 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-import scripts.workspace_executor as workspace_executor  # noqa: E402
-from scripts.workspace_executor import (  # noqa: E402
+from scripts import workspace_executor
+from scripts.workspace_executor import (
     ClonedWorkspace,
     WorkspaceExecutionError,
     WorkspaceInput,

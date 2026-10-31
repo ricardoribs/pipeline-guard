@@ -12,7 +12,7 @@ from jsonschema import Draft202012Validator
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.eligibility_gate import (  # noqa: E402
+from scripts.eligibility_gate import (
     EligibilityGateError,
     evaluate_eligibility,
 )

@@ -149,13 +149,17 @@ def test_registered_hook_sanitizes_diagnosis_agent_input() -> None:
             "literal-session-cookie",
         ),
         (
-            "Diagnostique a falha do pipeline. "
-            "SharedAccessSignature=sv=1&sig=literal-sas-signature&se=2",
+            (
+                "Diagnostique a falha do pipeline. "
+                "SharedAccessSignature=sv=1&sig=literal-sas-signature&se=2"
+            ),
             "literal-sas-signature",
         ),
         (
-            "Invoke pipeline-guard:diagnosis-agent with "
-            "Cookie: sessionid=literal-agent-session",
+            (
+                "Invoke pipeline-guard:diagnosis-agent with "
+                "Cookie: sessionid=literal-agent-session"
+            ),
             "literal-agent-session",
         ),
         (
@@ -368,12 +372,11 @@ def test_documented_skill_command_matches_direct_cli(tmp_path: Path) -> None:
     common = {
         "text": True,
         "capture_output": True,
-        "check": False,
         "cwd": consumer_root,
         "env": environment,
         "timeout": 60,
     }
-    skill_result = subprocess.run(skill_command, shell=True, **common)
+    skill_result = subprocess.run(skill_command, shell=True, check=False, **common)
     direct_result = subprocess.run(
         [
             uv_executable,
@@ -385,6 +388,7 @@ def test_documented_skill_command_matches_direct_cli(tmp_path: Path) -> None:
             str(consumer_root),
             str(incident_path),
         ],
+        check=False,
         **common,
     )
 
