@@ -16,20 +16,21 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts import draft_pr_publisher
-from scripts.draft_pr_publisher import (
+import scripts.draft_pr_publisher as repair_publisher  # noqa: E402
+from scripts.draft_pr_publisher import (  # noqa: E402
     BitbucketRepairPRClient,
     GitHubRepairPRClient,
     RepairPRPublicationError,
+    find_request,
     publish_request,
 )
-from scripts.pr_publication import (
+from scripts.pr_publication import (  # noqa: E402
     PipelineGuardDraftPRPublisher,
     PushedIncidentBranch,
     publish_draft_pr,
 )
-from scripts.pr_request_builder import PRRequest
-from scripts.test_executor import (
+from scripts.pr_request_builder import PRRequest  # noqa: E402
+from scripts.test_executor import (  # noqa: E402
     CommandResult,
 )
 from scripts.test_executor import (
@@ -37,8 +38,15 @@ from scripts.test_executor import (
 )
 
 
-def _reviewer_visible_body(incident_id: str, run_id: str) -> str:
-    return f"## Incident\n\nID: `{incident_id}`\nRun: `{run_id}`\n"
+def _reviewer_visible_body(
+    incident_id: str,
+    run_id: str,
+    failure_signature: str | None = None,
+) -> str:
+    body = f"## Incident\n\nID: `{incident_id}`\nRun: `{run_id}`"
+    if failure_signature is not None:
+        body += f"\nSignature: {failure_signature}"
+    return body + "\n"
 
 
 def _payload(
@@ -46,19 +54,23 @@ def _payload(
     *,
     incident_id: str = "INC-42",
     run_id: str = "run-42",
+    failure_signature: str | None = None,
 ) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "provider": provider,
         "repository": "delivery-dashboard",
         "repository_owner": "example-org",
         "title": "fix: remediate dbt failure",
-        "body": _reviewer_visible_body(incident_id, run_id),
+        "body": _reviewer_visible_body(incident_id, run_id, failure_signature),
         "branch": "pipeline-guard/INC-42",
         "base": "main",
         "draft": True,
         "incident_id": incident_id,
         "run_id": run_id,
     }
+    if failure_signature is not None:
+        payload["failure_signature"] = failure_signature
+    return payload
 
 
 def _provider_record(
@@ -69,6 +81,7 @@ def _provider_record(
     run_id: str = "run-42",
     draft: bool = True,
     source_repository: str | None = "example-org/delivery-dashboard",
+    failure_signature: str | None = None,
 ) -> dict[str, object]:
     if provider == "bitbucket":
         source: dict[str, object] = {"branch": {"name": "pipeline-guard/INC-42"}}
@@ -78,7 +91,9 @@ def _provider_record(
             "id": identifier,
             "state": "OPEN",
             "draft": draft,
-            "description": _reviewer_visible_body(incident_id, run_id),
+            "description": _reviewer_visible_body(
+                incident_id, run_id, failure_signature
+            ),
             "source": source,
             "destination": {"branch": {"name": "main"}},
             "links": {
@@ -97,7 +112,7 @@ def _provider_record(
         "number": identifier,
         "state": "open",
         "draft": draft,
-        "body": _reviewer_visible_body(incident_id, run_id),
+        "body": _reviewer_visible_body(incident_id, run_id, failure_signature),
         "head": head,
         "base": {"ref": "main"},
         "html_url": f"https://github.com/example-org/delivery-dashboard/pull/{identifier}",
@@ -144,7 +159,8 @@ class InMemoryRepairPRClient:
         assert title == "fix: remediate dbt failure"
         assert from_branch == "pipeline-guard/INC-42"
         assert to_branch == "main"
-        assert description == _reviewer_visible_body("INC-42", "run-42").strip()
+        assert "ID: `INC-42`" in description
+        assert "Run: `run-42`" in description
         assert draft is True
         self.create_calls += 1
         record = _provider_record(
@@ -152,6 +168,10 @@ class InMemoryRepairPRClient:
             identifier=len(self.records) + 1,
             draft=self.create_as_draft,
         )
+        if self.provider == "bitbucket":
+            record["description"] = description
+        else:
+            record["body"] = description
         self.records.append(record)
         if self.conflict_after_create:
             response = requests.Response()
@@ -174,7 +194,7 @@ def test_second_publication_reuses_the_same_repair_draft(provider: str) -> None:
     assert first["reused"] is False
     assert second == {**first, "reused": True}
     assert client.create_calls == 1
-    assert client.list_calls == 2
+    assert client.list_calls == 3
 
 
 @pytest.mark.parametrize("provider", ["bitbucket", "github"])
@@ -235,7 +255,98 @@ def test_create_conflict_is_reconciled_with_the_created_draft(provider: str) -> 
 
     assert result["reused"] is True
     assert client.create_calls == 1
-    assert client.list_calls == 2
+    assert client.list_calls == 3
+
+
+@pytest.mark.parametrize("provider", ["bitbucket", "github"])
+def test_unattended_identity_reuses_only_the_complete_signature(provider: str) -> None:
+    signature = "sha256:" + "a" * 64
+    client = InMemoryRepairPRClient(
+        provider,
+        records=[
+            _provider_record(
+                provider,
+                identifier=1,
+                failure_signature="sha256:" + "b" * 64,
+            ),
+            _provider_record(
+                provider,
+                identifier=2,
+                incident_id="incident-from-first-run",
+                run_id="run-from-first-attempt",
+                failure_signature=signature,
+            ),
+        ],
+    )
+
+    result = publish_request(
+        _payload(provider, failure_signature=signature),
+        client=client,
+    )
+
+    assert result == {
+        "id": "2",
+        "url": (
+            "https://bitbucket.org/example-org/delivery-dashboard/pull-requests/2"
+            if provider == "bitbucket"
+            else "https://github.com/example-org/delivery-dashboard/pull/2"
+        ),
+        "reused": True,
+    }
+    assert client.create_calls == 0
+
+
+@pytest.mark.parametrize("provider", ["bitbucket", "github"])
+def test_unattended_lookup_is_read_only_and_uses_stable_signature(
+    provider: str,
+) -> None:
+    signature = "sha256:" + "a" * 64
+    client = InMemoryRepairPRClient(
+        provider,
+        records=[
+            _provider_record(
+                provider,
+                identifier=9,
+                incident_id="incident-from-first-run",
+                run_id="run-from-first-attempt",
+                failure_signature=signature,
+            )
+        ],
+    )
+
+    result = find_request(
+        _payload(provider, failure_signature=signature),
+        client=client,
+    )
+
+    assert result is not None
+    assert result["reused"] is True
+    assert client.list_calls == 1
+    assert client.create_calls == 0
+
+
+@pytest.mark.parametrize("provider", ["bitbucket", "github"])
+def test_unattended_matching_non_draft_is_ignored(provider: str) -> None:
+    signature = "sha256:" + "a" * 64
+    client = InMemoryRepairPRClient(
+        provider,
+        records=[
+            _provider_record(
+                provider,
+                identifier=1,
+                draft=False,
+                failure_signature=signature,
+            )
+        ],
+    )
+
+    result = publish_request(
+        _payload(provider, failure_signature=signature),
+        client=client,
+    )
+
+    assert result["reused"] is False
+    assert client.create_calls == 1
 
 
 @pytest.mark.parametrize("provider", ["bitbucket", "github"])
@@ -380,7 +491,7 @@ def test_real_provider_clients_cover_list_create_and_close(
             StubResponse({}, status_code=200),
         ]
     )
-    monkeypatch.setattr(draft_pr_publisher.requests, "Session", lambda: session)
+    monkeypatch.setattr(repair_publisher.requests, "Session", lambda: session)
 
     if provider == "bitbucket":
         monkeypatch.setenv("BITBUCKET_API_TOKEN", "test-token")
@@ -434,11 +545,12 @@ def test_real_provider_clients_reconcile_create_conflict(
     session = RecordingSession(
         [
             StubResponse(empty_list),
+            StubResponse(empty_list),
             StubResponse({"error": "conflict"}, status_code=conflict_status),
             StubResponse(matching_list),
         ]
     )
-    monkeypatch.setattr(draft_pr_publisher.requests, "Session", lambda: session)
+    monkeypatch.setattr(repair_publisher.requests, "Session", lambda: session)
 
     if provider == "bitbucket":
         monkeypatch.setenv("BITBUCKET_API_TOKEN", "test-token")
@@ -463,7 +575,7 @@ def test_real_provider_clients_reconcile_create_conflict(
         ),
         "reused": True,
     }
-    assert [call[0] for call in session.calls] == ["GET", "POST", "GET"]
+    assert [call[0] for call in session.calls] == ["GET", "GET", "POST", "GET"]
 
 
 def test_standalone_script_rejects_unsupported_provider() -> None:

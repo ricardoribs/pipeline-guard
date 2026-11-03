@@ -306,8 +306,25 @@ def _record_git_mode(
         )
 
 
+def _empty_applied_file(path: str, section: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "path": path,
+        "policy_path": path,
+        "lines_changed": 0,
+        "changed_lines": [],
+        "changed_content": "",
+        "binary": False,
+        "modes": set(),
+        "old_mode": None,
+        "new_mode": None,
+        "section": section,
+    }
+
+
 def _parse_applied_patch(
     applied_patch: bytes,
+    *,
+    entry_modes: Mapping[str, object] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Parse paths, changed-line counts, and added lines from a Git binary/text diff.
 
@@ -332,6 +349,11 @@ def _parse_applied_patch(
                 current_file["binary"] = True
                 in_hunk = False
                 continue
+            if line.startswith(
+                (b"rename from ", b"rename to ", b"copy from ", b"copy to ")
+            ):
+                current_file["section"]["rename_or_copy"] = True
+                continue
             for prefix, field in (
                 (b"new file mode ", None),
                 (b"deleted file mode ", None),
@@ -346,6 +368,7 @@ def _parse_applied_patch(
                         )
                     else:
                         _record_git_mode(current_file, mode, violations)
+                        current_file["section"]["modes"].add(mode)
                         if field is not None:
                             current_file[field] = mode
                     break
@@ -360,6 +383,7 @@ def _parse_applied_patch(
                             )
                         else:
                             _record_git_mode(current_file, mode, violations)
+                            current_file["section"]["modes"].add(mode)
                     continue
                 if line.startswith(b"@@ "):
                     in_hunk = True
@@ -439,33 +463,64 @@ def _parse_applied_patch(
             continue
         previous_policy_path = header_paths[0][1]
         current_policy_path = header_paths[1][1]
+        section_paths = [current_policy_path]
         if previous_policy_path.casefold() != current_policy_path.casefold():
+            section_paths.insert(0, previous_policy_path)
+        duplicate = next(
+            (path for path in section_paths if path.casefold() in files),
+            None,
+        )
+        if duplicate is not None:
             violations.append(
-                "applied_patch changes a rename or copy; path-level safety validation "
-                "requires a separate validated record for each path"
+                f"applied_patch contains multiple diff sections for '{duplicate}'"
             )
             continue
-        identity = current_policy_path.casefold()
-        if identity in files:
-            violations.append(
-                f"applied_patch contains multiple diff sections for '{current_policy_path}'"
-            )
-            continue
-        current_file = {
-            "path": current_policy_path,
-            "policy_path": current_policy_path,
-            "lines_changed": 0,
-            "changed_lines": [],
-            "changed_content": "",
-            "binary": False,
+        section = {
+            "paths": tuple(section_paths),
+            "rename_or_copy": False,
             "modes": set(),
-            "old_mode": None,
-            "new_mode": None,
         }
-        files[identity] = current_file
+        for path in section_paths:
+            files[path.casefold()] = _empty_applied_file(path, section)
+        current_file = files[current_policy_path.casefold()]
 
     if header_count == 0:
         violations.append("applied_patch must contain at least one diff --git header")
+    normalized_entry_modes = {
+        path.casefold(): value
+        for path, value in (entry_modes or {}).items()
+        if isinstance(path, str)
+    }
+    seen_sections: set[int] = set()
+    for file_data in files.values():
+        section = file_data["section"]
+        section_id = id(section)
+        if section_id in seen_sections:
+            continue
+        seen_sections.add(section_id)
+        if not section["rename_or_copy"] or section["modes"]:
+            continue
+        trusted_modes: set[int] = set()
+        for path in section["paths"]:
+            supplied_modes = normalized_entry_modes.get(path.casefold(), ())
+            if isinstance(supplied_modes, int) and not isinstance(supplied_modes, bool):
+                trusted_modes.add(supplied_modes)
+            elif isinstance(supplied_modes, (list, tuple, set, frozenset)):
+                trusted_modes.update(
+                    mode
+                    for mode in supplied_modes
+                    if isinstance(mode, int) and not isinstance(mode, bool)
+                )
+        if not trusted_modes:
+            violations.append(
+                "applied_patch rename or copy lacks trusted Git mode provenance for "
+                f"'{file_data['path']}'"
+            )
+            continue
+        for path in section["paths"]:
+            target = files[path.casefold()]
+            for mode in trusted_modes:
+                _record_git_mode(target, mode, violations)
     for file_data in files.values():
         old_mode = file_data["old_mode"]
         new_mode = file_data["new_mode"]
@@ -498,10 +553,15 @@ def _parse_applied_patch(
 
 
 def _reconcile_applied_patch(
-    patch_files: Sequence[dict[str, Any]], applied_patch: bytes
+    patch_files: Sequence[dict[str, Any]],
+    applied_patch: bytes,
+    *,
+    entry_modes: Mapping[str, object] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Reject metadata unless paths, counts, and added content equal applied diff bytes."""
-    applied_files, violations = _parse_applied_patch(applied_patch)
+    applied_files, violations = _parse_applied_patch(
+        applied_patch, entry_modes=entry_modes
+    )
     expected_files = {
         file_data["policy_path"].casefold(): file_data for file_data in patch_files
     }
@@ -552,6 +612,7 @@ def validate_patch(
     *,
     verified_base_commit: object,
     applied_patch: object,
+    entry_modes: Mapping[str, object] | None = None,
 ) -> dict[str, Any]:
     """Validate a list of patch files against the safety configuration.
 
@@ -570,9 +631,10 @@ def validate_patch(
     verified base, not copied from untrusted remediation output.
     ``applied_patch`` must be the exact non-empty bytes of that workspace's
     applied diff (including binary changes when present), and its Git diff
-    headers must name exactly the files validated here. The returned mapping is
-    the intermediate provenance record that later test and Git stages must
-    persist unchanged and re-check against their workspace.
+    headers must name exactly the files validated here. ``entry_modes`` must
+    come from the same workspace's raw Git diff when a rename or copy omits mode
+    lines. The returned mapping is the intermediate provenance record that later
+    test and Git stages must persist unchanged and re-check against their workspace.
     """
     normalized_base_commit = _normalize_base_commit(verified_base_commit)
     applied_patch = _require_applied_patch(applied_patch)
@@ -609,7 +671,9 @@ def validate_patch(
     ]
     metadata_patch_files = _merge_patch_files(normalized_files)
     applied_patch_files, applied_patch_violations = _reconcile_applied_patch(
-        metadata_patch_files, applied_patch
+        metadata_patch_files,
+        applied_patch,
+        entry_modes=entry_modes,
     )
     if applied_patch_violations:
         requires_human_review = True

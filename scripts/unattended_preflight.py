@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["jsonschema>=4.0.0", "pyyaml>=6.0.3"]
+# dependencies = ["httpx>=0.27.0", "jsonschema>=4.0.0", "pyyaml>=6.0.3"]
 # ///
 """Fail-closed prerequisites for unattended Pipeline Guard execution."""
 
@@ -24,12 +24,22 @@ try:  # Support both direct script execution and package-style imports.
         GitExecutorValidationError,
         validate_remediation_git_configuration,
     )
+    from .model_backend import (
+        ModelBackendConfigurationError,
+        ModelSettings,
+        resolve_model_settings,
+    )
     from .validate_config import ConfigValidationError, validate_config
 except ImportError:  # pragma: no cover - direct script execution
     from artifact_store import LocalArtifactStore
     from git_executor import (
         GitExecutorValidationError,
         validate_remediation_git_configuration,
+    )
+    from model_backend import (
+        ModelBackendConfigurationError,
+        ModelSettings,
+        resolve_model_settings,
     )
     from validate_config import ConfigValidationError, validate_config
 
@@ -78,9 +88,10 @@ class UnattendedPreflightResult:
     authorization_state_dir: Path | None
     uv_executable: str
     git_executable: str
-    claude_executable: str
-    claude_version: tuple[int, int, int]
+    claude_executable: str | None
+    claude_version: tuple[int, int, int] | None
     model: str
+    model_settings: ModelSettings | None = None
 
 
 def run_preflight(
@@ -90,6 +101,7 @@ def run_preflight(
     output_dir: Path | str,
     workspace_parent: Path | str | None = None,
     authorization_state_dir: Path | str | None = None,
+    model_provider: str | None = None,
     model: str | None = None,
     environment: Mapping[str, str] | None = None,
     executable_finder: Callable[[str], str | None] | None = None,
@@ -104,16 +116,28 @@ def run_preflight(
     unattended = config["unattended"]
     remediation_enabled = unattended["remediation_enabled"] is True
 
-    finder = executable_finder or shutil.which
-    executables = _runtime_executables(finder)
-    runner = command_runner or subprocess.run
-    claude_version = _claude_version(
-        executables["claude"],
-        environment=host_environment,
-        command_runner=runner,
+    settings = _model_prerequisites(
+        config,
+        host_environment,
+        provider=model_provider,
+        model=model,
     )
-
-    selected_model = _model_prerequisites(host_environment, model=model)
+    finder = executable_finder or shutil.which
+    executables = _runtime_executables(
+        finder,
+        require_claude=settings.uses_claude_code,
+    )
+    runner = command_runner or subprocess.run
+    claude_executable = executables.get("claude")
+    claude_version = (
+        _claude_version(
+            claude_executable,
+            environment=host_environment,
+            command_runner=runner,
+        )
+        if claude_executable is not None
+        else None
+    )
     resolved_project_root = _existing_directory(project_root, "--project-root")
     resolved_output_dir = _writable_directory(output_dir, "--output-dir")
     resolved_workspace_parent = _writable_directory(
@@ -157,9 +181,10 @@ def run_preflight(
         authorization_state_dir=resolved_state_dir,
         uv_executable=executables["uv"],
         git_executable=executables["git"],
-        claude_executable=executables["claude"],
+        claude_executable=claude_executable,
         claude_version=claude_version,
-        model=selected_model,
+        model=settings.model,
+        model_settings=settings,
     )
 
 
@@ -180,7 +205,9 @@ def _validated_unattended_config(config_path: Path) -> dict[str, Any]:
     return config
 
 
-def _runtime_executables(finder: Callable[[str], str | None]) -> dict[str, str]:
+def _runtime_executables(
+    finder: Callable[[str], str | None], *, require_claude: bool
+) -> dict[str, str]:
     executables: dict[str, str] = {}
     for name in ("uv", "git"):
         executable = finder(name)
@@ -191,13 +218,14 @@ def _runtime_executables(finder: Callable[[str], str | None]) -> dict[str, str]:
             )
         executables[name] = executable
 
-    claude_executable = _resolve_claude_executable(finder)
-    if claude_executable is None:
-        raise UnattendedPreflightError(
-            "claude",
-            "Claude Code CLI is not available on PATH",
-        )
-    executables["claude"] = claude_executable
+    if require_claude:
+        claude_executable = _resolve_claude_executable(finder)
+        if claude_executable is None:
+            raise UnattendedPreflightError(
+                "claude",
+                "Claude Code CLI is not available on PATH",
+            )
+        executables["claude"] = claude_executable
     return executables
 
 
@@ -274,24 +302,41 @@ def _claude_version(
     return version
 
 
-def _model_prerequisites(environment: Mapping[str, str], *, model: str | None) -> str:
-    _required_environment(environment, "ANTHROPIC_BASE_URL")
-    if not environment.get("ANTHROPIC_AUTH_TOKEN") and not environment.get(
-        "ANTHROPIC_API_KEY"
-    ):
-        raise UnattendedPreflightError(
-            "model credentials",
-            "ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY must be present",
+def _model_prerequisites(
+    config: Mapping[str, Any],
+    environment: Mapping[str, str],
+    *,
+    provider: str | None,
+    model: str | None,
+) -> ModelSettings:
+    try:
+        settings = resolve_model_settings(
+            config,
+            provider=provider,
+            model=model,
+            environment=environment,
         )
-    selected_model = model.strip() if isinstance(model, str) else ""
-    if not selected_model:
-        selected_model = environment.get("ANTHROPIC_MODEL", "").strip()
-    if not selected_model:
-        raise UnattendedPreflightError(
-            "model",
-            "provide --model or set ANTHROPIC_MODEL",
-        )
-    return selected_model
+    except ModelBackendConfigurationError as error:
+        message = str(error)
+        if "credential" in message:
+            prerequisite = "model credentials"
+        elif "base URL" in message:
+            prerequisite = "model base URL"
+        else:
+            prerequisite = "model"
+        raise UnattendedPreflightError(prerequisite, message) from error
+    if settings.provider == "anthropic":
+        if settings.base_url is None:
+            raise UnattendedPreflightError(
+                "ANTHROPIC_BASE_URL",
+                "Anthropic requires runtime.model.base_url or ANTHROPIC_BASE_URL",
+            )
+        if settings.api_key is None:
+            raise UnattendedPreflightError(
+                "model credentials",
+                "Anthropic model credentials must be present",
+            )
+    return settings
 
 
 def _remediation_credentials(
@@ -440,7 +485,7 @@ def _assert_separate_directory(
 
 
 def _assert_create_once_support(state_directory: Path) -> None:
-    store = LocalArtifactStore(plugin_data_dir=state_directory)
+    store = LocalArtifactStore(plugin_data_dir=state_directory, durable=True)
     run_id = f"preflight-{uuid.uuid4().hex}"
     reference = "authorization-create-once-probe"
     runs_directory_existed = (state_directory / "runs").exists()

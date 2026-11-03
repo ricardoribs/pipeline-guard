@@ -82,6 +82,7 @@ class TestExecutor:
         run_id: str,
         store: ArtifactStore | None = None,
         cwd: Path | None = None,
+        environment: Mapping[str, str] | None = None,
     ) -> None:
         try:
             commands = project_config["validation"]["commands"]
@@ -111,6 +112,15 @@ class TestExecutor:
         self._run_id = run_id
         self._store = store
         self._cwd = cwd
+        source_environment = os.environ if environment is None else environment
+        if not all(
+            isinstance(name, str) and isinstance(value, str)
+            for name, value in source_environment.items()
+        ):
+            raise TestExecutorConfigurationError(
+                "environment must contain only string entries"
+            )
+        self._environment = dict(source_environment)
         self._attempt: int = 0
         self._instance_id: str = uuid.uuid4().hex
 
@@ -148,6 +158,7 @@ class TestExecutor:
                 encoding="utf-8",
                 errors="replace",
                 cwd=self._cwd,
+                env=self._environment,
                 start_new_session=os.name != "nt",
             )
             try:

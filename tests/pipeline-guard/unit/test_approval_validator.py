@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
+from hmac import new as hmac_new
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +12,8 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.approval_validator import (
+from scripts.approval_authenticator import canonical_approval_bytes  # noqa: E402
+from scripts.approval_validator import (  # noqa: E402
     ApprovalValidationError,
     validate_approval,
 )
@@ -23,6 +26,7 @@ BASE_COMMIT = "0123456789abcdef0123456789abcdef01234567"
 EXTERNAL_REFERENCE = "https://approvals.example.invalid/approval-001"
 NOW = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
 MAX_AGE = timedelta(hours=1)
+SHARED_SECRET = b"approval-validator-test-secret-123"
 
 
 def _approval(**overrides: object) -> dict[str, Any]:
@@ -51,6 +55,30 @@ def _validate(approval: object) -> dict[str, Any]:
     )
 
 
+def _validate_unattended(
+    approval: object, *, shared_secret: bytes | None = SHARED_SECRET
+) -> dict[str, Any]:
+    return validate_approval(
+        approval,
+        expected_incident_id=INCIDENT_ID,
+        expected_diagnosis_hash=DIAGNOSIS_HASH,
+        expected_base_commit=BASE_COMMIT,
+        max_age=MAX_AGE,
+        current_time=NOW,
+        unattended=True,
+        shared_secret=shared_secret,
+    )
+
+
+def _signed_policy_approval() -> dict[str, Any]:
+    approval = _approval(channel_type="policy", actor="sp:pipeline-guard")
+    digest = hmac_new(
+        SHARED_SECRET, canonical_approval_bytes(approval), sha256
+    ).hexdigest()
+    approval["signature"] = f"hmac-sha256:{digest}"
+    return approval
+
+
 def test_valid_bound_approval_is_accepted() -> None:
     approval = _approval()
 
@@ -58,6 +86,32 @@ def test_valid_bound_approval_is_accepted() -> None:
 
     assert result == approval
     assert result is not approval
+
+
+def test_local_approval_is_rejected_in_unattended_mode() -> None:
+    with pytest.raises(ApprovalValidationError, match="requires policy"):
+        _validate_unattended(_approval())
+
+
+def test_missing_channel_type_is_rejected_in_unattended_mode() -> None:
+    approval = _signed_policy_approval()
+    approval.pop("channel_type")
+
+    with pytest.raises(ApprovalValidationError, match="requires policy"):
+        _validate_unattended(approval)
+
+
+def test_unsigned_policy_approval_is_rejected_in_unattended_mode() -> None:
+    approval = _approval(channel_type="policy", actor="sp:pipeline-guard")
+
+    with pytest.raises(ApprovalValidationError, match="signature must use"):
+        _validate_unattended(approval)
+
+
+def test_signed_policy_approval_is_accepted_in_unattended_mode() -> None:
+    approval = _signed_policy_approval()
+
+    assert _validate_unattended(approval) == approval
 
 
 @pytest.mark.parametrize(

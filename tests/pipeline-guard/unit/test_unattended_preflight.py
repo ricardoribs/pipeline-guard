@@ -13,8 +13,8 @@ import yaml
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts import unattended_preflight
-from scripts.unattended_preflight import (
+import scripts.unattended_preflight as unattended_preflight  # noqa: E402
+from scripts.unattended_preflight import (  # noqa: E402
     UnattendedPreflightError,
     run_preflight,
 )
@@ -202,6 +202,102 @@ def test_report_only_does_not_require_repository_credentials_or_state_directory(
 
     assert result.authorization_state_dir is None
     assert result.config["unattended"]["remediation_enabled"] is False
+
+
+def test_openai_compatible_backend_does_not_require_claude_code(
+    tmp_path: Path,
+) -> None:
+    directories = _directories(tmp_path)
+    config_path = _write_config(tmp_path, remediation_enabled=False)
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["runtime"]["model"] = {
+        "provider": "ollama",
+        "name": "llama-test",
+    }
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    environment = _environment(directories)
+    for name in (
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_MODEL",
+        "PUSH_TOKEN",
+        "BITBUCKET_API_TOKEN",
+        "POLICY_SECRET",
+    ):
+        environment.pop(name, None)
+
+    result = _run(
+        config_path,
+        directories,
+        environment,
+        authorization_state_dir=None,
+        executable_finder=_finder(missing="claude"),
+    )
+
+    assert result.model == "llama-test"
+    assert result.model_settings is not None
+    assert result.model_settings.profile == "ollama"
+    assert result.claude_executable is None
+    assert result.claude_version is None
+
+
+def test_databricks_m2m_preflight_uses_unity_gateway_without_claude_code(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    directories = _directories(tmp_path)
+    config_path = _write_config(tmp_path, remediation_enabled=False)
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    config["runtime"]["model"] = {"provider": "databricks"}
+    config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+    environment = _environment(directories)
+    for name in ("ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL"):
+        environment.pop(name)
+    environment.update(
+        {
+            "DATABRICKS_HOST": "https://workspace.example",
+            "DATABRICKS_MODEL_CLIENT_ID": "model-client-id",
+            "DATABRICKS_MODEL_CLIENT_SECRET": "model-client-secret",
+        }
+    )
+    original_resolver = unattended_preflight.resolve_model_settings
+
+    class OAuthClient:
+        def post(self, _url: str, **_kwargs: object) -> object:
+            class Response:
+                status_code = 200
+                text = ""
+
+                @staticmethod
+                def json() -> object:
+                    return {"access_token": "short-lived-token"}
+
+            return Response()
+
+    def resolve_with_fake_oauth(*args: object, **kwargs: object) -> object:
+        kwargs["oauth_client"] = OAuthClient()
+        return original_resolver(*args, **kwargs)
+
+    monkeypatch.setattr(
+        unattended_preflight,
+        "resolve_model_settings",
+        resolve_with_fake_oauth,
+    )
+
+    result = _run(
+        config_path,
+        directories,
+        environment,
+        authorization_state_dir=None,
+        executable_finder=_finder(missing="claude"),
+    )
+
+    assert result.model == "system.ai.meta-llama-3-3-70b-instruct"
+    assert result.model_settings is not None
+    assert result.model_settings.base_url == (
+        "https://workspace.example/ai-gateway/mlflow/v1"
+    )
+    assert result.claude_executable is None
 
 
 def test_config_without_unattended_section_is_rejected(tmp_path: Path) -> None:

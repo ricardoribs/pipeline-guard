@@ -11,8 +11,9 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.patch_validator import (
+from scripts.patch_validator import (  # noqa: E402
     PatchValidationError,
+    _parse_applied_patch,
 )
 from scripts.patch_validator import (
     validate_patch as _validate_patch,
@@ -502,6 +503,22 @@ def test_staged_symlink_to_sensitive_path_is_rejected_without_provenance(
     assert any("symbolic link" in violation for violation in result["violations"])
     assert "base_commit" not in result
     assert "patch_hash" not in result
+
+
+def test_pure_rename_of_tracked_symlink_is_rejected_from_base_mode() -> None:
+    applied_patch = (
+        b"diff --git a/tools/link.sh b/src/editable/link.sh\n"
+        b"similarity index 100%\n"
+        b"rename from tools/link.sh\n"
+        b"rename to src/editable/link.sh\n"
+    )
+
+    _files, violations = _parse_applied_patch(
+        applied_patch,
+        entry_modes={"tools/link.sh": {0o120000}},
+    )
+
+    assert any("symbolic link" in violation for violation in violations)
 
 
 def test_regular_file_mode_change_is_rejected_without_provenance() -> None:

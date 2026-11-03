@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from fnmatch import fnmatchcase
@@ -365,6 +366,9 @@ def test_documented_skill_command_matches_direct_cli(tmp_path: Path) -> None:
         .replace("<consumer-root>", consumer_root.as_posix())
         .replace("<incident-input-path>", incident_path.as_posix())
     )
+    skill_arguments = shlex.split(skill_command, posix=True)
+    assert skill_arguments[:2] == ["uv", "run"]
+    skill_arguments[0] = uv_executable
 
     environment = os.environ.copy()
     environment["CLAUDE_PLUGIN_DATA"] = str(tmp_path / "plugin-data")
@@ -376,7 +380,7 @@ def test_documented_skill_command_matches_direct_cli(tmp_path: Path) -> None:
         "env": environment,
         "timeout": 60,
     }
-    skill_result = subprocess.run(skill_command, shell=True, check=False, **common)
+    skill_result = subprocess.run(skill_arguments, check=False, **common)
     direct_result = subprocess.run(
         [
             uv_executable,

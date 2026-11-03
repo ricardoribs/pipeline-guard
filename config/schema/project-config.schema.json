@@ -119,7 +119,7 @@
               "command": {
                 "type": "string",
                 "minLength": 1,
-                "description": "Command to execute."
+                "description": "Project-owned command executed as written. Commands that can affect external systems must use isolated, non-production targets and least-privilege credentials, and must not approve or merge pull requests, deploy to production, or rerun the failed host pipeline."
               },
               "timeout_seconds": {
                 "type": "integer",
@@ -306,6 +306,40 @@
         "artifact_store": {
           "type": "string",
           "description": "Artifact storage type (e.g. local)."
+        },
+        "model": {
+          "type": "object",
+          "description": "Optional model backend selection. When absent, the provider profile defaults to Anthropic; a model and credentials are still required at runtime.",
+          "additionalProperties": false,
+          "required": ["provider"],
+          "properties": {
+            "provider": {
+              "type": "string",
+              "enum": ["anthropic", "databricks", "openai", "gemini", "ollama", "openai-compatible"],
+              "description": "Model API profile. Databricks, OpenAI, Gemini, Ollama and custom OpenAI-compatible services use Chat Completions."
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Provider model identifier; may instead be supplied by --model or environment."
+            },
+            "base_url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?://",
+              "description": "Credential-free API base URL. Required for custom OpenAI-compatible services."
+            },
+            "credential_ref": {
+              "type": "string",
+              "oneOf": [
+                { "pattern": "^[A-Z][A-Z0-9_]*$" },
+                { "pattern": "^env:[A-Z][A-Z0-9_]*$" },
+                { "pattern": "^\\$\\{[A-Z][A-Z0-9_]*\\}$" },
+                { "pattern": "^secret:[A-Za-z0-9][A-Za-z0-9._/-]*$" }
+              ],
+              "description": "Reference to the model API credential. Optional for local endpoints such as Ollama."
+            }
+          }
         }
       }
     }

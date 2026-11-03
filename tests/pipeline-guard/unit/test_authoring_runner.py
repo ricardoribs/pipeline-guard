@@ -11,14 +11,14 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts import authoring_runner
-from scripts.authoring_runner import (
+import scripts.authoring_runner as authoring_runner  # noqa: E402
+from scripts.authoring_runner import (  # noqa: E402
     AuthoringLimitReached,
     AuthoringRunnerConfigurationError,
     AuthoringRunnerError,
     run_authoring,
 )
-from scripts.execution_budget import ExecutionBudget
+from scripts.execution_budget import ExecutionBudget  # noqa: E402
 
 sys.path.remove(str(PLUGIN_ROOT))
 
@@ -38,8 +38,11 @@ class FakeWorkspace:
 
 
 class FakeBudget:
-    def __init__(self, *, remaining_seconds: float = 45) -> None:
+    def __init__(
+        self, *, remaining_seconds: float = 45, remaining_tokens: int = 1000
+    ) -> None:
         self.remaining_seconds = remaining_seconds
+        self.remaining_tokens = remaining_tokens
         self.recorded_tokens: list[int] = []
         self.check_calls = 0
 
@@ -48,6 +51,9 @@ class FakeBudget:
 
     def record_tokens(self, tokens: int) -> None:
         self.recorded_tokens.append(tokens)
+
+    def call_tool(self, operation):
+        return operation()
 
 
 class FakeProcess:
@@ -115,6 +121,21 @@ class CompletedProcessWithStraggler(FakeProcess):
     def __init__(self) -> None:
         super().__init__("complete", "")
         self.group_member_running = True
+
+
+def _write_fake_proc_stat(
+    proc_root: Path,
+    process_id: int,
+    *,
+    state: str,
+    process_group_id: int,
+) -> None:
+    process_directory = proc_root / str(process_id)
+    process_directory.mkdir(parents=True, exist_ok=True)
+    (process_directory / "stat").write_text(
+        f"{process_id} (fake worker) {state} 1 {process_group_id} {process_group_id} 0\n",
+        encoding="utf-8",
+    )
 
 
 class FakeJob:
@@ -293,6 +314,7 @@ def test_run_uses_trusted_agent_isolated_settings_and_minimal_environment(
     assert environment["ANTHROPIC_AUTH_TOKEN"] == "gateway-oauth-token"
     assert environment["ANTHROPIC_BASE_URL"] == "https://gateway.example/anthropic"
     assert environment["CLAUDE_AGENT_SDK_DISABLE_BUILTIN_AGENTS"] == "1"
+    assert environment["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] == "125"
     assert json.loads(environment["PIPELINE_GUARD_APPROVED_READ_PATHS"]) == [
         "models/orders.sql",
         "evidence/incident.json",
@@ -377,69 +399,177 @@ def test_timeout_interrupts_then_terminates_the_process_group(
 
 
 def test_timeout_terminates_remaining_group_even_if_parent_exits_after_interrupt(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    process = InterruptExitProcess()
-    job = FakeJob()
-    termination_events: list[str] = []
-    monkeypatch.setattr(
-        authoring_runner,
-        "_interrupt_process_group",
-        lambda _process: termination_events.append("SIGINT"),
-    )
-
-    def terminate_group(_process: FakeProcess, assigned_job: FakeJob | None) -> None:
-        termination_events.append("SIGTERM")
-        if assigned_job is not None:
-            assigned_job.terminate()
-
-    monkeypatch.setattr(authoring_runner, "_terminate_process_group", terminate_group)
-
-    output = authoring_runner._stop_timed_out_process(
-        cast(subprocess.Popen[str], process), job=job, grace_seconds=0.01
-    )
-
-    assert output == ("partial", "interrupted")
-    assert termination_events == ["SIGINT", "SIGTERM"]
-    assert job.events == ["terminate", "wait_empty"]
-
-
-def test_normal_completion_terminates_remaining_process_group(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    process = CompletedProcessWithStraggler()
-    cleanup_events: list[str] = []
-
-    def stop_completed_group(
-        completed_process: CompletedProcessWithStraggler,
-        *,
-        job: FakeJob | None,
-        grace_seconds: float,
-    ) -> None:
-        assert completed_process.poll() == 0
-        assert completed_process.group_member_running is True
-        assert job is None
-        assert grace_seconds == 0.25
-        cleanup_events.extend(["SIGTERM", "wait"])
-        completed_process.group_member_running = False
-
-    monkeypatch.setattr(
-        authoring_runner, "_stop_completed_process_group", stop_completed_group
+    process = InterruptExitProcess()
+    proc_root = tmp_path / "proc"
+    child_process_id = process.pid + 1
+    _write_fake_proc_stat(
+        proc_root,
+        child_process_id,
+        state="S",
+        process_group_id=process.pid,
     )
-    monkeypatch.setattr(authoring_runner, "_create_process_job", lambda: None)
+    sent_signals: list[object] = []
+    sigkill = getattr(authoring_runner.signal, "SIGKILL", 9)
+
+    def kill_process_group(process_group_id: int, sent_signal: object) -> None:
+        assert process_group_id == process.pid
+        sent_signals.append(sent_signal)
+        if sent_signal == sigkill:
+            _write_fake_proc_stat(
+                proc_root,
+                child_process_id,
+                state="Z",
+                process_group_id=process.pid,
+            )
+
+    monkeypatch.setattr(authoring_runner, "_IS_WINDOWS", False)
+    monkeypatch.setattr(authoring_runner, "_IS_LINUX", True)
+    monkeypatch.setattr(authoring_runner, "_PROC_ROOT", proc_root)
+    monkeypatch.setattr(authoring_runner.signal, "SIGKILL", sigkill, raising=False)
+    monkeypatch.setattr(
+        authoring_runner.os, "killpg", kill_process_group, raising=False
+    )
 
     result = authoring_runner._run_process(
         ["claude"],
         cwd=tmp_path,
         environment={},
         timeout=1.0,
-        termination_grace_seconds=0.25,
+        termination_grace_seconds=0.001,
+        process_factory=cast(Any, lambda *_args, **_kwargs: process),
+    )
+
+    assert result == ("partial", "interrupted", 130, True)
+    assert sent_signals == [
+        authoring_runner.signal.SIGINT,
+        authoring_runner.signal.SIGTERM,
+        sigkill,
+    ]
+
+
+def test_normal_completion_terminates_remaining_process_group(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    process = CompletedProcessWithStraggler()
+    proc_root = tmp_path / "proc"
+    child_process_id = process.pid + 1
+    _write_fake_proc_stat(
+        proc_root,
+        child_process_id,
+        state="S",
+        process_group_id=process.pid,
+    )
+    sent_signals: list[object] = []
+    sigkill = getattr(authoring_runner.signal, "SIGKILL", 9)
+
+    def kill_process_group(process_group_id: int, sent_signal: object) -> None:
+        assert process_group_id == process.pid
+        sent_signals.append(sent_signal)
+        if sent_signal == sigkill:
+            process.group_member_running = False
+            _write_fake_proc_stat(
+                proc_root,
+                child_process_id,
+                state="Z",
+                process_group_id=process.pid,
+            )
+
+    monkeypatch.setattr(authoring_runner, "_IS_WINDOWS", False)
+    monkeypatch.setattr(authoring_runner, "_IS_LINUX", True)
+    monkeypatch.setattr(authoring_runner, "_PROC_ROOT", proc_root)
+    monkeypatch.setattr(authoring_runner.signal, "SIGKILL", sigkill, raising=False)
+    monkeypatch.setattr(
+        authoring_runner.os, "killpg", kill_process_group, raising=False
+    )
+
+    result = authoring_runner._run_process(
+        ["claude"],
+        cwd=tmp_path,
+        environment={},
+        timeout=1.0,
+        termination_grace_seconds=0.001,
         process_factory=cast(Any, lambda *_args, **_kwargs: process),
     )
 
     assert result == ("complete", "", 0, False)
-    assert cleanup_events == ["SIGTERM", "wait"]
+    assert sent_signals == [authoring_runner.signal.SIGTERM, sigkill]
     assert process.group_member_running is False
+
+
+def test_normal_completion_fails_when_process_group_survives_sigkill(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    process = CompletedProcessWithStraggler()
+    proc_root = tmp_path / "proc"
+    _write_fake_proc_stat(
+        proc_root,
+        process.pid + 1,
+        state="S",
+        process_group_id=process.pid,
+    )
+    sent_signals: list[object] = []
+    sigkill = getattr(authoring_runner.signal, "SIGKILL", 9)
+
+    def kill_process_group(process_group_id: int, sent_signal: object) -> None:
+        assert process_group_id == process.pid
+        sent_signals.append(sent_signal)
+
+    monkeypatch.setattr(authoring_runner, "_IS_WINDOWS", False)
+    monkeypatch.setattr(authoring_runner, "_IS_LINUX", True)
+    monkeypatch.setattr(authoring_runner, "_PROC_ROOT", proc_root)
+    monkeypatch.setattr(authoring_runner.signal, "SIGKILL", sigkill, raising=False)
+    monkeypatch.setattr(
+        authoring_runner.os, "killpg", kill_process_group, raising=False
+    )
+
+    with pytest.raises(AuthoringRunnerError, match="process group did not exit"):
+        authoring_runner._run_process(
+            ["claude"],
+            cwd=tmp_path,
+            environment={},
+            timeout=1.0,
+            termination_grace_seconds=0.001,
+            process_factory=cast(Any, lambda *_args, **_kwargs: process),
+        )
+
+    assert sent_signals == [authoring_runner.signal.SIGTERM, sigkill]
+    assert process.group_member_running is True
+
+
+def test_normal_completion_treats_zombie_only_group_as_exited(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    process = CompletedProcessWithStraggler()
+    proc_root = tmp_path / "proc"
+    _write_fake_proc_stat(
+        proc_root,
+        process.pid + 1,
+        state="Z",
+        process_group_id=process.pid,
+    )
+    sent_signals: list[object] = []
+
+    monkeypatch.setattr(authoring_runner, "_IS_WINDOWS", False)
+    monkeypatch.setattr(authoring_runner, "_IS_LINUX", True)
+    monkeypatch.setattr(authoring_runner, "_PROC_ROOT", proc_root)
+    monkeypatch.setattr(
+        authoring_runner.os,
+        "killpg",
+        lambda process_group_id, sent_signal: sent_signals.append(
+            (process_group_id, sent_signal)
+        ),
+        raising=False,
+    )
+
+    authoring_runner._stop_completed_process_group(
+        cast(subprocess.Popen[str], process),
+        job=None,
+        grace_seconds=0.001,
+    )
+
+    assert sent_signals == [(process.pid, authoring_runner.signal.SIGTERM)]
 
 
 def test_usage_above_remaining_token_budget_is_rejected(
@@ -467,6 +597,25 @@ def test_usage_above_remaining_token_budget_is_rejected(
         )
 
     assert captured.value.outcome == "LIMIT_REACHED"
+    assert captured.value.reason_code == "TOKEN_LIMIT"
+
+
+def test_exhausted_token_budget_stops_before_starting_the_process(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    workspace = _workspace(tmp_path)
+    monkeypatch.setattr(authoring_runner.subprocess, "Popen", pytest.fail)
+
+    with pytest.raises(AuthoringLimitReached) as captured:
+        run_authoring(
+            workspace,
+            prompt="repair",
+            approved_read_paths=["models/orders.sql"],
+            budget=FakeBudget(remaining_tokens=0),
+            claude_executable="claude",
+            model_environment=_model_environment(),
+        )
+
     assert captured.value.reason_code == "TOKEN_LIMIT"
 
 

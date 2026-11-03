@@ -11,8 +11,8 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts import workspace_executor
-from scripts.workspace_executor import (
+import scripts.workspace_executor as workspace_executor  # noqa: E402
+from scripts.workspace_executor import (  # noqa: E402
     ClonedWorkspace,
     WorkspaceExecutionError,
     WorkspaceInput,
@@ -165,6 +165,28 @@ def test_prepare_workspace_creates_an_incident_branch_from_the_configured_prefix
         )
         assert (
             _git(workspace.path, "rev-parse", "HEAD").stdout.strip() == approved_commit
+        )
+
+
+def test_prepare_workspace_uses_the_incident_source_branch(tmp_path: Path) -> None:
+    repository, _, config_path = _repository_with_config(tmp_path)
+    _git(repository, "switch", "-c", "feature/orders")
+    (repository / "feature.txt").write_text("feature commit\n", encoding="utf-8")
+    _git(repository, "add", "feature.txt")
+    _git(repository, "commit", "-m", "test: add feature commit")
+    feature_commit = _git(repository, "rev-parse", "HEAD").stdout.strip()
+    _git(repository, "switch", "main")
+
+    with prepare_workspace(
+        config_path,
+        base_commit=feature_commit,
+        base_branch="feature/orders",
+        incident_id="INC-FEATURE-001",
+        parent_dir=tmp_path,
+    ) as workspace:
+        assert workspace.inputs.base_branch == "feature/orders"
+        assert (
+            _git(workspace.path, "rev-parse", "HEAD").stdout.strip() == feature_commit
         )
 
 

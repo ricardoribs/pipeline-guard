@@ -38,7 +38,7 @@ _PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 if str(_PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(_PLUGIN_ROOT))
 
-from scripts.validate_config import validate_config
+from scripts.validate_config import validate_config  # noqa: E402
 
 _CLONE_TIMEOUT_SECONDS = 120
 _WORKSPACE_GIT_TIMEOUT_SECONDS = 30
@@ -343,7 +343,7 @@ class ClonedWorkspace:
             return
         try:
             self.close()
-        except Exception as cleanup_exc:  # noqa: BLE001
+        except Exception as cleanup_exc:
             exception.add_note(f"cleanup also failed: {cleanup_exc}")
 
     def close(self) -> None:
@@ -494,11 +494,16 @@ def _retained_workspace_directory(inputs: WorkspaceInput, parent_dir: Path) -> P
         + "\\"
         + os.environ.get("USERNAME", "")
     )
-    key_material = (
-        f"{identity}\0{inputs.repository_url}\0"
-        f"{inputs.base_branch}\0{inputs.incident_branch}"
-    )
-    key = hashlib.sha256(key_material.encode("utf-8")).hexdigest()[:32]
+    key = hashlib.sha256(
+        "\0".join(
+            (
+                identity,
+                inputs.repository_url,
+                inputs.base_branch,
+                inputs.incident_branch,
+            )
+        ).encode("utf-8")
+    ).hexdigest()[:32]
     workspace_dir = parent / f".pipeline-guard-{key}"
     if workspace_dir.is_symlink():
         raise WorkspaceExecutionError(
@@ -822,6 +827,7 @@ def clone_workspace(
     base_commit: object,
     incident_id: object,
     parent_dir: Path | None = None,
+    base_branch: object | None = None,
 ) -> ClonedWorkspace:
     """Create an independent clone without checking out files or creating an incident branch."""
     workspace_parent = (
@@ -832,6 +838,7 @@ def clone_workspace(
         config_path,
         base_commit=base_commit,
         incident_id=incident_id,
+        base_branch=base_branch,
     )
     try:
         workspace = ClonedWorkspace(inputs, parent_dir=workspace_parent)
@@ -847,13 +854,13 @@ def clone_workspace(
         )
         try:
             workspace.close()
-        except Exception as cleanup_exc:  # noqa: BLE001
+        except Exception as cleanup_exc:
             error.add_note(f"cleanup also failed: {cleanup_exc}")
         raise error from None
     except BaseException as exc:
         try:
             workspace.close()
-        except Exception as cleanup_exc:  # noqa: BLE001
+        except Exception as cleanup_exc:
             exc.add_note(f"cleanup also failed: {cleanup_exc}")
         raise
     return workspace
@@ -865,6 +872,7 @@ def prepare_workspace(
     base_commit: object,
     incident_id: object,
     parent_dir: Path | None = None,
+    base_branch: object | None = None,
     allow_branch_rebind: bool = False,
 ) -> ClonedWorkspace:
     """Verify an isolated clone and prepare its deterministic incident branch.
@@ -884,6 +892,7 @@ def prepare_workspace(
         config_path,
         base_commit=base_commit,
         incident_id=incident_id,
+        base_branch=base_branch,
     )
     workspace_dir = _retained_workspace_directory(inputs, workspace_parent)
     claim = _RetainedWorkspaceClaim(workspace_dir)
@@ -915,7 +924,7 @@ def prepare_workspace(
     except BaseException as exc:
         try:
             claim.release()
-        except Exception as cleanup_exc:  # noqa: BLE001
+        except Exception as cleanup_exc:
             exc.add_note(f"claim cleanup also failed: {cleanup_exc}")
         raise
     if not reused:
@@ -927,13 +936,13 @@ def prepare_workspace(
             )
             try:
                 workspace.discard()
-            except Exception as cleanup_exc:  # noqa: BLE001
+            except Exception as cleanup_exc:
                 error.add_note(f"cleanup also failed: {cleanup_exc}")
             raise error from None
         except BaseException as exc:
             try:
                 workspace.discard()
-            except Exception as cleanup_exc:  # noqa: BLE001
+            except Exception as cleanup_exc:
                 exc.add_note(f"cleanup also failed: {cleanup_exc}")
             raise
     try:
@@ -1056,12 +1065,12 @@ def prepare_workspace(
                 workspace.close()
             else:
                 workspace.discard()
-        except Exception as cleanup_exc:  # noqa: BLE001
+        except Exception as cleanup_exc:
             exc.add_note(f"cleanup also failed: {cleanup_exc}")
         finally:
             try:
                 workspace._release_claim()
-            except Exception as cleanup_exc:  # noqa: BLE001
+            except Exception as cleanup_exc:
                 exc.add_note(f"claim cleanup also failed: {cleanup_exc}")
         raise
     return workspace
@@ -1723,18 +1732,19 @@ def _run_git_command(
             [sys.executable, "-I", "-c", supervisor, *command],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE if capture_stdout else subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
             env=isolated_env,
             cwd=tempfile.gettempdir(),
             start_new_session=os.name != "nt",
         )
         if job is not None:
             job.assign(process.pid)
-        stdout, _ = process.communicate(b"1", timeout=timeout)
+        stdout, stderr = process.communicate(b"1", timeout=timeout)
         return subprocess.CompletedProcess(
             command,
             process.wait(),
             stdout.decode("utf-8", errors="replace") if stdout is not None else "",
+            stderr.decode("utf-8", errors="replace") if stderr is not None else "",
         )
     finally:
         try:
@@ -1778,23 +1788,29 @@ def validate_workspace_input(
     *,
     base_commit: object,
     incident_id: object,
+    base_branch: object | None = None,
 ) -> WorkspaceInput:
     """Load configuration and validate required fields without creating a workspace.
 
     The caller supplies a base commit from an already validated approval. This
     function checks its presence, not the approval or the commit's existence.
     """
-    repository_url, base_branch, branch_prefix = _workspace_repository_settings(
-        config_path
+    repository_url, configured_base_branch, branch_prefix = (
+        _workspace_repository_settings(config_path)
+    )
+    selected_base_branch = (
+        configured_base_branch
+        if base_branch is None
+        else _required_text(base_branch, "base_branch")
     )
     approved_commit = _required_text(base_commit, "base_commit")
     normalized_incident_id = _required_text(incident_id, "incident_id")
     _validate_repository_url(repository_url)
-    _validate_branch(base_branch)
+    _validate_branch(selected_base_branch)
     incident_branch = _incident_branch_name(branch_prefix, normalized_incident_id)
     return WorkspaceInput(
         repository_url,
-        base_branch,
+        selected_base_branch,
         approved_commit,
         incident_branch,
         normalized_incident_id,
@@ -1855,7 +1871,7 @@ def _validate_repository_url(repository_url: str) -> None:
 
 
 def _validate_branch(base_branch: str) -> None:
-    _validate_branch_name(base_branch, "$.repository.default_branch")
+    _validate_branch_name(base_branch, "base_branch")
 
 
 def _incident_branch_name(branch_prefix: str, incident_id: str) -> str:

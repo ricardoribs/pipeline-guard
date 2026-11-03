@@ -2,6 +2,10 @@
   "name": "pipeline-guard",
   "version": "1.0.0",
   "description": "Diagnoses pipeline failures from traceable evidence and produces tested remediations as draft pull requests after verified approval.",
+  "author": {
+    "name": "Ricardo",
+    "url": "https://github.com/ricardoribs"
+  },
   "license": "Apache-2.0",
   "commands": [],
   "agents": [

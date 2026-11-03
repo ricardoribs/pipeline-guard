@@ -10,12 +10,17 @@ import pytest
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(PLUGIN_ROOT))
 
-from scripts.pr_request_builder import (
+from scripts.pr_request_builder import (  # noqa: E402
     PRRequest,
     PRRequestBuilderError,
     build_pr_request,
 )
-from scripts.test_executor import CommandResult, TestExecutorResult
+from scripts.test_executor import (  # noqa: E402
+    CommandResult,
+)
+from scripts.test_executor import (
+    TestExecutorResult as ValidationExecutionResult,
+)
 
 sys.path.remove(str(PLUGIN_ROOT))
 
@@ -96,15 +101,17 @@ def _test_result(
     run_id: str = "run-123",
     results: list[CommandResult] | None = None,
     validation_status: str = "ALL_PASSED",
-) -> TestExecutorResult:
+) -> ValidationExecutionResult:
     if results is None:
         results = [
             CommandResult(
                 name="dbt-test", status="PASSED", duration_seconds=1.5, log_ref=None
             )
         ]
-    return TestExecutorResult(
-        run_id=run_id, results=results, validation_status=validation_status
+    return ValidationExecutionResult(
+        run_id=run_id,
+        results=results,
+        validation_status=validation_status,
     )
 
 
@@ -158,6 +165,15 @@ def test_body_contains_all_six_sections() -> None:
         "## Limitations",
     ):
         assert header in result.body
+
+
+def test_unattended_request_exposes_the_failure_signature() -> None:
+    signature = "sha256:" + "a" * 64
+
+    result = _call(failure_signature=signature)
+
+    assert result.failure_signature == signature
+    assert f"Signature: {signature}" in result.body
 
 
 def test_body_with_files_changed_shows_table() -> None:

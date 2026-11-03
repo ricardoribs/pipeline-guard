@@ -93,7 +93,7 @@ stateDiagram-v2
 | `DRAFT_PR_PUBLISHED` | 0 | Draft PR criada, ou reaproveitada para a mesma assinatura (`draft_pr.reused`) | — |
 | `REPORT_ONLY` | 3 | Diagnóstico entregue sem correção | `NOT_ELIGIBLE`, `UNKNOWN_CAUSE`, `REMEDIATION_DISABLED`, `MISSING_INPUT` |
 | `BLOCKED` | 4 | Um controle impediu a publicação | `AUTHORIZATION_INVALID`, `VALIDATION_FAILED`, `CHANGE_LIMIT_EXCEEDED`, `PR_TARGET_REFUSED`, `RECURSION_GUARD` |
-| `LIMIT_REACHED` | 5 | Tempo ou tokens esgotados; nenhuma nova operação é iniciada e, se o push já ocorreu, `pushed_branch` é informado | `TIME_LIMIT`, `TOKEN_LIMIT` |
+| `LIMIT_REACHED` | 5 | Tempo, tokens ou chamadas de ferramenta esgotados; nenhuma nova operação é iniciada e, se o push já ocorreu, `pushed_branch` é informado | `TIME_LIMIT`, `TOKEN_LIMIT`, `TOOL_CALL_LIMIT` |
 | `ERROR` | 1 | Falha operacional | `MODEL_UNAVAILABLE`, `CREDENTIAL_UNAVAILABLE`, `OPERATIONAL_FAILURE` |
 | `ERROR` | 2 | Entrada, configuração ou pré-requisito inválido, antes de qualquer alteração | `INVALID_INPUT`, `PREREQUISITE_MISSING` |
 
@@ -120,9 +120,9 @@ Os códigos 0 a 3 mantêm o mesmo sentido do `diagnose_cli.py` (0 sucesso, 1 fal
 
 ## Assinatura da Falha
 
-- **Campos**: `sha256:` sobre a representação canônica da identidade do repositório, `pipeline_id`, `failed_step`, `code_version.commit` e branch de destino resolvida.
+- **Campos**: `sha256:` sobre a representação canônica da identidade do repositório, `pipeline_id`, `code_version.commit` e branch de destino resolvida. `failed_step` permanece evidência obrigatória, mas fica fora da assinatura para que falhas paralelas da mesma execução convirjam.
 - **Relações**: gravada em `correlation.signature` e numa linha visível `Signature:` da descrição da draft PR, ao lado das linhas `ID:` e `Run:` que a spec principal já usa; também deriva uma branch de remediação determinística sob `repository.remediation_branch_prefix`.
-- **Regras de validação**: antes do diagnóstico, uma consulta somente leitura pode localizar uma draft PR aberta e evitar a chamada de modelo no caminho comum de repetição. Essa consulta é apenas uma otimização: antes de criar e depois de conflito de push ou criação, o publicador privado do Pipeline Guard reconcilia novamente a identidade completa da PR — repositório de origem, branch de origem determinística, branch de destino, assinatura, estado aberto e marcação de draft. Só uma correspondência completa produz `DRAFT_PR_PUBLISHED` com `reused=true` (FR-021, SC-008). Mudanças de repositório, commit ou destino geram assinaturas diferentes.
+- **Regras de validação**: somente depois do diagnóstico, da elegibilidade e da autorização por política, uma consulta somente leitura pode localizar uma draft PR aberta e evitar novo workspace, push e publicação. Antes de criar e depois de conflito de push ou criação, o publicador privado do Pipeline Guard reconcilia novamente a identidade completa da PR — repositório de origem, branch de origem determinística, branch de destino, assinatura, estado aberto e marcação de draft. Só uma correspondência completa produz `DRAFT_PR_PUBLISHED` com `reused=true` (FR-021, SC-008). Mudanças de repositório, commit ou destino geram assinaturas diferentes.
 - **Transições de estado**: nenhuma; valor derivado.
 
 ## Identidade de Serviço
@@ -130,6 +130,6 @@ Os códigos 0 a 3 mantêm o mesmo sentido do `diagnose_cli.py` (0 sucesso, 1 fal
 - **Finalidades**, cada uma com a menor permissão possível no host:
   1. **Leitura do pipeline**: ler a execução que falhou, seus logs e artefatos.
   2. **Escrita restrita no repositório**: push da branch de correção e criação da draft PR.
-  3. **Uso do modelo**: chamar o endpoint compatível com a API da Anthropic.
+  3. **Uso do modelo**: chamar o endpoint Anthropic ou OpenAI-compatible selecionado.
   4. **Segredo de autorização**: assinar a Autorização por Política.
 - **Regras de validação**: nenhuma identidade pessoal (FR-013); as credenciais de escrita e o segredo de autorização ficam fora do alcance do modelo e das ferramentas controladas por ele (FR-014); os guias por host listam as permissões mínimas de cada finalidade (FR-025).
