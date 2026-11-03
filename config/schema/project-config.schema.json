@@ -323,6 +323,11 @@
               "minLength": 1,
               "description": "Provider model identifier; may instead be supplied by --model or environment."
             },
+            "max_output_tokens": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Optional per-request output ceiling, independent from the shared input/output execution budget."
+            },
             "base_url": {
               "type": "string",
               "format": "uri",

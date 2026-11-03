@@ -130,7 +130,9 @@ class DiagnosisRunner:
                     raise
                 input_tokens = _conservative_input_token_bound(agent_prompt, messages)
             budget.record_tokens(input_tokens)
-            output_limit = budget.remaining_tokens - 1
+            output_limit = self.settings.bounded_output_tokens(
+                budget.remaining_tokens - 1
+            )
             if output_limit < 1:
                 raise ExecutionBudgetExceeded("max_tokens")
             response = budget.call_tool(
@@ -179,7 +181,7 @@ class DiagnosisRunner:
             [{"role": "user", "content": user_message}],
         )
         budget.record_tokens(input_bound)
-        output_limit = budget.remaining_tokens - 1
+        output_limit = self.settings.bounded_output_tokens(budget.remaining_tokens - 1)
         if output_limit < 1:
             raise ExecutionBudgetExceeded("max_tokens")
         response = budget.call_tool(

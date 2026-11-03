@@ -58,6 +58,7 @@ runtime:
   model:
     provider: ollama # anthropic, databricks, openai, gemini, ollama, or openai-compatible
     name: llama3.3
+    # max_output_tokens: 8192 # Optional provider-specific per-request ceiling.
     base_url: http://127.0.0.1:11434/v1
     # credential_ref: env:PIPELINE_GUARD_MODEL_API_KEY
 ```

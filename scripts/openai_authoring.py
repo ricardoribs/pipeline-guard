@@ -155,7 +155,7 @@ def run_openai_authoring(
         _record_tokens(budget, input_bound)
         total_tokens += input_bound
         total_input_tokens += input_bound
-        output_limit = budget.remaining_tokens - 1
+        output_limit = settings.bounded_output_tokens(budget.remaining_tokens - 1)
         if output_limit < 1:
             raise DirectAuthoringLimitReached("TOKEN_LIMIT")
         try:

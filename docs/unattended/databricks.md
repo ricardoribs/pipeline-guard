@@ -56,7 +56,11 @@ runtime:
   model:
     provider: databricks
     name: system.ai.meta-llama-3-3-70b-instruct
+    max_output_tokens: 8192
 ```
+
+`max_output_tokens` limits each model response independently from the shared investigation
+budget. Set it no higher than the selected model's documented output limit.
 
 Set `DATABRICKS_HOST` to the HTTPS workspace origin and inject
 `DATABRICKS_MODEL_CLIENT_ID` plus `DATABRICKS_MODEL_CLIENT_SECRET`. At startup, Pipeline Guard

@@ -72,6 +72,7 @@ class ModelSettings:
     base_url: str | None
     api_key: str | None
     credential_kind: str | None = None
+    max_output_tokens: int | None = None
 
     @property
     def uses_claude_code(self) -> bool:
@@ -80,6 +81,12 @@ class ModelSettings:
     @property
     def secret_values(self) -> tuple[str, ...]:
         return (self.api_key,) if self.api_key else ()
+
+    def bounded_output_tokens(self, available_tokens: int) -> int:
+        """Cap one response without reducing the shared input/output budget."""
+        if self.max_output_tokens is None:
+            return available_tokens
+        return min(available_tokens, self.max_output_tokens)
 
 
 class HTTPResponse(Protocol):
@@ -148,6 +155,10 @@ def resolve_model_settings(
         raise ModelBackendConfigurationError(
             "model name is required through --model, runtime.model.name, or environment"
         )
+    max_output_tokens = _optional_positive_integer(
+        configured.get("max_output_tokens"),
+        "runtime.model.max_output_tokens",
+    )
 
     if canonical_provider == "anthropic":
         base_url = (
@@ -234,6 +245,7 @@ def resolve_model_settings(
         base_url=base_url,
         api_key=api_key,
         credential_kind=credential_kind,
+        max_output_tokens=max_output_tokens,
     )
 
 
@@ -307,6 +319,14 @@ def _configured_model(config: Mapping[str, Any] | None) -> Mapping[str, Any]:
         return {}
     configured = runtime.get("model")
     return configured if isinstance(configured, Mapping) else {}
+
+
+def _optional_positive_integer(value: object, field: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ModelBackendConfigurationError(f"{field} must be a positive integer")
+    return value
 
 
 def _profile_model_environment(

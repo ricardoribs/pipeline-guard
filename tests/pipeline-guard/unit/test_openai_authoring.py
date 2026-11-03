@@ -112,13 +112,14 @@ def _workspace(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _settings() -> ModelSettings:
+def _settings(*, max_output_tokens: int | None = None) -> ModelSettings:
     return ModelSettings(
         profile="ollama",
         provider="openai-compatible",
         model="llama-test",
         base_url="http://127.0.0.1:11434/v1",
         api_key=None,
+        max_output_tokens=max_output_tokens,
     )
 
 
@@ -169,6 +170,35 @@ def test_direct_authoring_exposes_only_bounded_file_tools(tmp_path: Path) -> Non
         "write_file",
         "edit_file",
     }
+
+
+def test_direct_authoring_respects_per_request_output_limit(tmp_path: Path) -> None:
+    client = FakeClient(
+        [
+            {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "No repair required."},
+                    }
+                ],
+                "usage": {"completion_tokens": 5},
+            }
+        ]
+    )
+
+    run_openai_authoring(
+        _workspace(tmp_path),
+        prompt="Inspect the failure.",
+        agent_prompt="Use only the supplied tools.",
+        approved_read_paths=["models/orders.sql"],
+        settings=_settings(max_output_tokens=1024),
+        budget=FakeBudget(),
+        max_turns=1,
+        client=client,
+    )
+
+    assert client.requests[0]["json"]["max_tokens"] == 1024
 
 
 def test_direct_authoring_fails_closed_outside_editable_paths(tmp_path: Path) -> None:

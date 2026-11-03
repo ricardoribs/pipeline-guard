@@ -260,6 +260,42 @@ def test_custom_profile_uses_only_its_explicit_credential_reference() -> None:
     assert settings.api_key == "custom-secret"
 
 
+def test_model_output_limit_is_resolved_independently_from_execution_budget() -> None:
+    settings = resolve_model_settings(
+        {
+            "runtime": {
+                "model": {
+                    "provider": "ollama",
+                    "name": "llama-test",
+                    "max_output_tokens": 8192,
+                }
+            }
+        },
+        environment={},
+    )
+
+    assert settings.max_output_tokens == 8192
+    assert settings.bounded_output_tokens(50_000) == 8192
+    assert settings.bounded_output_tokens(4096) == 4096
+
+
+@pytest.mark.parametrize("value", [0, -1, True, "8192"])
+def test_model_output_limit_must_be_a_positive_integer(value: object) -> None:
+    with pytest.raises(ModelBackendConfigurationError, match="max_output_tokens"):
+        resolve_model_settings(
+            {
+                "runtime": {
+                    "model": {
+                        "provider": "ollama",
+                        "name": "llama-test",
+                        "max_output_tokens": value,
+                    }
+                }
+            },
+            environment={},
+        )
+
+
 def test_literal_model_credentials_are_rejected() -> None:
     with pytest.raises(ModelBackendConfigurationError, match="credential_ref"):
         resolve_model_settings(
@@ -320,6 +356,7 @@ def test_diagnosis_runner_uses_openai_compatible_backend() -> None:
         model="llama-test",
         base_url="http://127.0.0.1:11434/v1",
         api_key=None,
+        max_output_tokens=512,
     )
     budget = ExecutionBudget(
         {
@@ -339,6 +376,7 @@ def test_diagnosis_runner_uses_openai_compatible_backend() -> None:
 
     assert result == {"cause_status": "UNKNOWN"}
     assert client.requests[0]["json"]["model"] == "llama-test"
+    assert client.requests[0]["json"]["max_tokens"] == 512
 
 
 @pytest.mark.parametrize(
