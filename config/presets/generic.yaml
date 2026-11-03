@@ -33,7 +33,7 @@ repository:
   url: ""
   # Default branch used as the base for draft PRs.
   default_branch: "main"
-  # Prefix for disposable branches created for approved remediation.
+  # Prefix for disposable branches created for authorized remediation.
   remediation_branch_prefix: "pipeline-guard"
 
 # Evidence providers enabled for this project.
@@ -43,6 +43,10 @@ repository:
 evidence_providers: []
 
 # Validation commands executed after a remediation to verify the fix (V2).
+# Commands run exactly as declared and may have external side effects. Use an
+# isolated, non-production target and least-privilege credentials whenever a
+# command can write to an external system.
+# Never use a validation command to deploy to production or rerun the failed host pipeline.
 validation:
   commands: []
 
@@ -97,6 +101,15 @@ eligibility:
 runtime:
   # Artifact storage backend ("local" stores under $CLAUDE_PLUGIN_DATA/runs/).
   artifact_store: "local"
+  # Optional headless model backend. If omitted, the provider profile defaults to Anthropic;
+  # the model and credentials must still be provided through environment variables.
+  # Credentials must be references, never literal values.
+  # model:
+  #   provider: "ollama" # anthropic, databricks, openai, gemini, ollama, openai-compatible
+  #   name: "llama3.3"
+  #   max_output_tokens: 8192 # Provider-specific per-request output ceiling.
+  #   base_url: "http://127.0.0.1:11434/v1"
+  #   credential_ref: "env:PIPELINE_GUARD_MODEL_API_KEY"
   # Starter investigation limits; consumer projects may tighten them without changing the plugin.
   execution_budget:
     max_tool_calls: 20

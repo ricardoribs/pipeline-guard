@@ -14,6 +14,7 @@ uv run "<pipeline-guard-root>/scripts/unattended_cli.py" \
   --output-dir "<host-retention-dir>" \
   [--authorization-state-dir "<durable-host-state-dir>"] \
   [--workspace-parent "<writable-dir>"] \
+  [--model-provider "<provider>"] \
   [--model "<model-id>"] \
   "<failure-context.json>"
 ```
@@ -26,7 +27,8 @@ uv run "<pipeline-guard-root>/scripts/unattended_cli.py" \
 | `--output-dir` | Sim | Diretório que o host retém depois do descarte do ambiente (FR-018). |
 | `--authorization-state-dir` | Quando `unattended.remediation_enabled: true` | Diretório persistente do host, compartilhado entre novas tentativas isoladas, usado somente para marcadores create-once de autorizações consumidas. Deve ficar fora do repositório consumidor e do workspace, preservar criação atômica e não é repassado ao agente de autoria. |
 | `--workspace-parent` | Não | Onde criar o workspace isolado. Padrão: diretório temporário do sistema. |
-| `--model` | Não | Sobrescreve `ANTHROPIC_MODEL`. |
+| `--model-provider` | Não | Sobrescreve `runtime.model.provider`; aceita `anthropic`, `databricks`, `openai`, `gemini`, `ollama` ou `openai-compatible`. Ausente, preserva Anthropic. |
+| `--model` | Não | Sobrescreve `runtime.model.name` ou a variável de modelo do provedor. |
 | arquivo de contexto | Sim | `incident_input_v1` 1.1 ([schema](./incident_input_v1.schema.json)). `-` lê da entrada padrão. |
 
 ## Variáveis de ambiente
@@ -35,17 +37,17 @@ Todas são fornecidas pelo host a partir do seu cofre de segredos. Nenhuma apare
 
 | Finalidade | Variável | Origem |
 |---|---|---|
-| Endpoint do modelo | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` (ou `ANTHROPIC_API_KEY`), `ANTHROPIC_MODEL` | Identidade de uso do modelo |
+| Endpoint do modelo | `runtime.model` e as variáveis do perfil: Anthropic (`ANTHROPIC_*`), Databricks (`DATABRICKS_HOST`, `DATABRICKS_MODEL_BASE_URL`, `DATABRICKS_MODEL`, `DATABRICKS_TOKEN` ou o par `DATABRICKS_MODEL_CLIENT_ID`/`DATABRICKS_MODEL_CLIENT_SECRET`), OpenAI (`OPENAI_*`), Gemini (`GEMINI_*`), Ollama (`OLLAMA_*`) ou genéricas (`PIPELINE_GUARD_MODEL_*`) | Identidade de uso do modelo |
 | Armazenamento local de artefatos comuns do plugin | `CLAUDE_PLUGIN_DATA` | Diretório gravável do ambiente efêmero; não armazena o estado de consumo da autorização |
 | Push da branch de correção | a referenciada em `repository.push_credential_ref` | Identidade de escrita restrita |
 | Publicação da draft PR | as do publicador privado do Pipeline Guard para o provedor configurado (ex.: `BITBUCKET_API_TOKEN` ou `GITHUB_API_TOKEN`) | Identidade de escrita restrita |
 | Assinatura da autorização | a referenciada em `unattended.authorization_secret_ref` | Segredo do host, com pelo menos 32 bytes |
 
-O entrypoint repassa ao agente de autoria somente o ambiente mínimo de autoria (`ClonedWorkspace.authorship_environment()` mais as variáveis do endpoint do modelo). Credenciais de escrita e o segredo de autorização nunca são herdados por processos controlados pelo modelo (FR-014).
+No perfil `anthropic`, o entrypoint repassa ao subprocesso de autoria somente `ClonedWorkspace.authorship_environment()` mais as variáveis do endpoint do modelo. Nos perfis OpenAI-compatible, o cliente HTTP usa apenas a credencial do modelo e as ferramentas de arquivo não recebem credenciais. Credenciais de escrita e o segredo de autorização nunca são herdados por processos ou ferramentas controlados pelo modelo (FR-014).
 
 ## Ordem de execução
 
-1. Pré-requisitos (FR-019): configuração válida; `uv`, `git` e `claude` (≥ 2.1.295) disponíveis; provedor Bitbucket ou GitHub aceito pelo publicador privado do Pipeline Guard; variáveis referenciadas presentes (só a presença é verificada, nunca o valor); diretórios graváveis; e, quando a remediação está habilitada, `--authorization-state-dir` fora do repositório e do workspace, com suporte ao `put` create-once.
+1. Pré-requisitos (FR-019): configuração válida; `uv` e `git` disponíveis; `claude` (≥ 2.1.295) somente para o backend `anthropic`; endpoint e credencial do backend selecionado; provedor Bitbucket ou GitHub aceito pelo publicador privado do Pipeline Guard; variáveis referenciadas presentes (só a presença é verificada, nunca o valor); diretórios graváveis; e, quando a remediação está habilitada, `--authorization-state-dir` fora do repositório e do workspace, com suporte ao `put` create-once.
 2. Validação do contexto da falha no modo não interativo, incluindo a proteção contra recursão (FR-017).
 3. Cálculo da assinatura e deduplicação (FR-021).
 4. Diagnóstico e decisão de elegibilidade, pelo mesmo fluxo do `diagnose_cli.py`.
@@ -72,7 +74,7 @@ Os limites de tempo e de tokens (`unattended.max_seconds`, `unattended.max_model
 | 0 | `DRAFT_PR_PUBLISHED` | Draft PR criada ou reaproveitada; o link está no resumo. |
 | 3 | `REPORT_ONLY` | Diagnóstico entregue sem correção (não elegível, causa desconhecida, correção desabilitada ou commit ausente). |
 | 4 | `BLOCKED` | Um controle impediu a publicação; `reason_code` diz qual. |
-| 5 | `LIMIT_REACHED` | Tempo ou tokens esgotados; nenhuma nova operação é iniciada e uma branch já enviada é informada em `pushed_branch`. |
+| 5 | `LIMIT_REACHED` | Tempo, tokens ou chamadas de ferramenta esgotados; nenhuma nova operação é iniciada e uma branch já enviada é informada em `pushed_branch`. |
 | 1 | `ERROR` | Falha operacional (modelo indisponível, credencial expirada etc.). |
 | 2 | `ERROR` | Entrada, configuração ou pré-requisito inválido, antes de qualquer alteração. |
 

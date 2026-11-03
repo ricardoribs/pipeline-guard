@@ -8,13 +8,19 @@ from __future__ import annotations
 
 import html
 import json
-from collections.abc import Mapping
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
+
+try:  # Support both direct script execution and package-style imports.
+    from .redaction import redact_text
+except ImportError:  # pragma: no cover - direct script execution
+    from redaction import redact_text
 
 _PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 _INCIDENT_SCHEMA_PATH = (
@@ -36,6 +42,7 @@ class PRRequest:
     branch: str
     base: str
     draft: bool
+    failure_signature: str | None = None
 
 
 def build_pr_request(
@@ -48,6 +55,8 @@ def build_pr_request(
     files_changed: list[dict[str, Any]],
     test_result: object,
     limitations: list[str] | None = None,
+    failure_signature: str | None = None,
+    secret_values: Sequence[str] = (),
 ) -> PRRequest:
     """Build a neutral PR request. Does not make network calls."""
     incident_doc = _validated_mapping(
@@ -69,6 +78,7 @@ def build_pr_request(
         raise PRRequestBuilderError("base must not be empty")
     if not commit:
         raise PRRequestBuilderError("commit must not be empty")
+    normalized_signature = _failure_signature(failure_signature)
 
     _check_test_result(test_result)
 
@@ -84,19 +94,26 @@ def build_pr_request(
         list(limitations or []),
     )
 
-    return PRRequest(
-        title=_build_title(incident_doc, diagnosis_doc),
-        body=_build_body(
+    title = _sanitize_text(_build_title(incident_doc, diagnosis_doc), secret_values)
+    body = _sanitize_text(
+        _build_body(
             incident_doc,
             diagnosis_doc,
             files_changed,
             test_result,
             merged_limitations,
             commit=commit,
+            failure_signature=normalized_signature,
         ),
+        secret_values,
+    )
+    return PRRequest(
+        title=title,
+        body=body,
         branch=branch,
         base=base,
         draft=True,
+        failure_signature=normalized_signature,
     )
 
 
@@ -137,9 +154,15 @@ def _build_body(
     limitations: list[str],
     *,
     commit: str,
+    failure_signature: str | None,
 ) -> str:
     lines: list[str] = []
-    _section_incident(lines, incident, commit=commit)
+    _section_incident(
+        lines,
+        incident,
+        commit=commit,
+        failure_signature=failure_signature,
+    )
     _section_diagnosis(lines, diagnosis)
     _section_evidence(lines, diagnosis)
     _section_files(lines, files_changed)
@@ -149,7 +172,11 @@ def _build_body(
 
 
 def _section_incident(
-    lines: list[str], incident: dict[str, Any], *, commit: str
+    lines: list[str],
+    incident: dict[str, Any],
+    *,
+    commit: str,
+    failure_signature: str | None,
 ) -> None:
     def _field(key: str) -> str:
         v = incident.get(key)
@@ -167,6 +194,8 @@ def _section_incident(
         f"Error summary: {_field('error_summary')}",
         f"Commit: {_text(commit)}",
     ]
+    if failure_signature is not None:
+        lines.append(f"Signature: {failure_signature}")
 
 
 def _section_diagnosis(lines: list[str], diagnosis: dict[str, Any]) -> None:
@@ -256,6 +285,39 @@ def _text(value: str) -> str:
     for character in "\\`*_{}[]()#!|":
         escaped = escaped.replace(character, "\\" + character)
     return escaped
+
+
+def _failure_signature(value: object) -> str | None:
+    if value is None:
+        return None
+    if (
+        not isinstance(value, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None
+    ):
+        raise PRRequestBuilderError(
+            "failure_signature must use sha256 with 64 lowercase hexadecimal digits"
+        )
+    return value
+
+
+def _sanitize_text(value: str, secrets: Sequence[str]) -> str:
+    if isinstance(secrets, (str, bytes)):
+        raise PRRequestBuilderError("secret_values must be a sequence of strings")
+    sanitized = redact_text(value)
+    for secret in secrets:
+        if not isinstance(secret, str):
+            raise PRRequestBuilderError("secret_values must contain only strings")
+        if secret:
+            encoded_candidates = {
+                secret,
+                html.escape(secret, quote=False),
+                html.escape(secret, quote=True),
+                json.dumps(secret, ensure_ascii=False)[1:-1],
+                _text(secret),
+            }
+            for candidate in encoded_candidates:
+                sanitized = sanitized.replace(candidate, "[REDACTED]")
+    return sanitized
 
 
 def _validated_mapping(

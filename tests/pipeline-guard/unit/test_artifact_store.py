@@ -31,6 +31,7 @@ def _load_artifact_store_module() -> ModuleType:
 _artifact_store_module = _load_artifact_store_module()
 ArtifactStoreConfigurationError = _artifact_store_module.ArtifactStoreConfigurationError
 ArtifactSession = _artifact_store_module.ArtifactSession
+DurableArtifactStore = _artifact_store_module.DurableArtifactStore
 LocalArtifactStore = _artifact_store_module.LocalArtifactStore
 SessionArtifactStore = _artifact_store_module.SessionArtifactStore
 resolve_artifact_store = _artifact_store_module.resolve_artifact_store
@@ -55,6 +56,28 @@ def test_local_store_uses_claude_plugin_data(monkeypatch, tmp_path):
 
     assert store.get("run-123", "result.json") == artifact
     assert (tmp_path / "runs" / "run-123").is_dir()
+
+
+def test_local_store_is_not_durable_without_explicit_host_declaration(tmp_path):
+    store = LocalArtifactStore(plugin_data_dir=tmp_path)
+
+    assert isinstance(store, DurableArtifactStore)
+    assert store.is_durable is False
+
+
+def test_durable_local_store_requires_explicit_host_directory(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(tmp_path / "ephemeral"))
+
+    with pytest.raises(ArtifactStoreConfigurationError, match="host-managed"):
+        LocalArtifactStore(durable=True)
+
+    store = resolve_artifact_store(
+        {"runtime": {"artifact_store": "local"}},
+        plugin_data_dir=tmp_path / "authorization-state",
+        durable=True,
+    )
+    assert isinstance(store, DurableArtifactStore)
+    assert store.is_durable is True
 
 
 def test_local_store_reuses_existing_reference_without_overwriting(tmp_path):

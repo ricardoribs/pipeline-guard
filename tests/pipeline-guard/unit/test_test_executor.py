@@ -226,6 +226,39 @@ def test_declared_command_records_status_pass(monkeypatch):
     assert cmd.duration_seconds >= 0
 
 
+def test_validation_command_receives_only_the_explicit_environment(monkeypatch):
+    captured_environment = None
+
+    class _TrackingPopen:
+        pid = 99999
+        returncode = 0
+
+        def __init__(self, *_args, **kwargs):
+            nonlocal captured_environment
+            captured_environment = kwargs["env"]
+
+        def communicate(self, **_kwargs):
+            return "ok\n", ""
+
+        def kill(self):
+            pass
+
+        def wait(self):
+            pass
+
+    monkeypatch.setenv("PIPELINE_GUARD_HOST_SECRET", "must-not-leak")
+    monkeypatch.setattr(_test_executor_module.subprocess, "Popen", _TrackingPopen)
+
+    result = TestExecutor(
+        FAKE_CONFIG,
+        run_id="run-isolated-environment",
+        environment={"PATH": "safe-path", "HOME": "safe-home"},
+    ).run(["fake-check"])
+
+    assert result.validation_status == "ALL_PASSED"
+    assert captured_environment == {"PATH": "safe-path", "HOME": "safe-home"}
+
+
 def test_declared_command_records_status_fail(monkeypatch):
     monkeypatch.setattr(
         _test_executor_module.subprocess,
@@ -420,8 +453,11 @@ def test_two_executor_instances_same_run_id_get_distinct_log_refs(monkeypatch):
 
 
 def test_non_utf8_output_is_tolerated_and_next_command_still_runs():
-    bad_bytes_command = (
-        "python3 -c \"import sys; sys.stdout.buffer.write(b'\\xff\\xfe bad')\""
+    bad_bytes_command = " ".join(
+        (
+            'python3 -c "import sys;',
+            "sys.stdout.buffer.write(b'\\xff\\xfe bad')\"",
+        )
     )
     config = {
         "validation": {

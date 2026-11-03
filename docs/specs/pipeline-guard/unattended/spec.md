@@ -128,7 +128,7 @@ Como no PR Reviewer, a preparação do ambiente, as credenciais, o acionamento e
 - **FR-020**: A draft PR DEVE ter como destino a branch cujo código falhou, salvo quando a configuração do projeto definir outra branch de destino.
 - **FR-021**: O sistema NÃO DEVE abrir uma nova draft PR quando a mesma etapa do mesmo pipeline falhar novamente sobre o mesmo commit para o qual já exista uma draft PR aberta pelo Pipeline Guard; nesse caso, o resultado DEVE apontar a PR existente.
 - **FR-022**: O sistema DEVE abrir no máximo uma draft PR por execução que falhou. Quando várias etapas falham na mesma execução, a falha mais a montante DEVE ser tratada como incidente principal e as demais DEVEM constar no relatório.
-- **FR-023**: O sistema NÃO DEVE aprovar ou fazer merge de PR, implantar, reexecutar o pipeline ou alterar dados. A nova execução após o merge segue o agendamento ou o processo normal do pipeline.
+- **FR-023**: O núcleo do sistema NÃO DEVE oferecer operação própria para aprovar ou fazer merge de PR, implantar, reexecutar o pipeline que falhou nem expor ao agente operações de alteração de dados. A nova execução após o merge segue o agendamento ou o processo normal do pipeline. Comandos de validação declarados pelo projeto são executados conforme a especificação principal: NÃO DEVEM realizar essas operações e DEVEM usar alvos isolados e não produtivos quando puderem produzir efeitos externos; o sistema não infere a semântica desses comandos.
 - **FR-024**: O sistema DEVE mascarar segredos e dados sensíveis em tudo o que o host registra ou publica: logs da execução, resumo, PR e artefatos retidos.
 
 **Documentação e validação**
@@ -179,7 +179,11 @@ Como no PR Reviewer, a preparação do ambiente, as credenciais, o acionamento e
 - O ambiente de execução é isolado, efêmero e dedicado a uma execução. Por isso o modo amplo de permissões da ferramenta, usado no PR Reviewer, é aceitável — desde que os controles do plugin (FR-006, FR-014) continuem ativos.
 - Databricks é o primeiro host coberto pela especificação. Bitbucket Pipelines e Airflow são extensões previstas; a coleta nativa de evidências desses hosts fica fora do escopo.
 - "Seguir a opção recomendada" vale só para decisões de baixo risco (FR-005). Destino, escopo e autorização da alteração nunca são inferidos.
-- O endpoint de modelo é qualquer endpoint compatível com a API da Anthropic — por exemplo, Databricks Model Serving acessado por identidade de serviço, como no PR Reviewer.
+- O backend de modelo é selecionável por configuração. Anthropic permanece o padrão compatível;
+  Databricks, OpenAI, Gemini, Ollama/Llama e serviços próprios podem usar Chat Completions
+  OpenAI-compatible.
+  A remediação direta exige suporte a function tools e aplica os mesmos limites determinísticos de
+  leitura e escrita fora do modelo.
 - A publicação continua no boundary privado do Pipeline Guard, limitado a localizar, criar, reutilizar ou fechar com segurança as draft PRs do próprio fluxo em Bitbucket e GitHub. O ambiente não precisa instalar outro plugin.
 - Bitbucket é o provedor Git do pipeline de referência; o contrato continua neutro a provedor.
 - O limite padrão por execução não assistida é de 60 minutos (3.600 segundos, como na demonstração), ajustável pela configuração do projeto.

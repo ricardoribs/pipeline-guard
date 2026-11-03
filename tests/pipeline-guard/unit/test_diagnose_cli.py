@@ -394,6 +394,7 @@ def _manifest_run_id(incident: dict, plugin_data_dir: Path) -> str:
             "incident": incident,
             "config": validate_config(SECOND_CONFIG),
             "project_root": str(Path.cwd().resolve()),
+            "model_provider": "anthropic",
             "model": "test-diagnosis",
             "agent_hash": hashlib.sha256(
                 (PLUGIN_ROOT / "agents/diagnosis-agent.md").read_bytes()
@@ -449,7 +450,7 @@ def test_headless_cli_requires_model_configuration(
     if expected_code == 2:
         assert result.stdout == ""
         assert result.stderr.startswith("Invalid project configuration:")
-        assert "ANTHROPIC_MODEL or --model" in result.stderr
+        assert "model name is required" in result.stderr
         assert diagnostic_endpoint == []
         assert not (tmp_path / "runs").exists()
     else:

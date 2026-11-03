@@ -73,10 +73,24 @@ _REMEDIATION_RESULT_STATUSES = frozenset(
 _TEST_VALIDATION_STATUSES = frozenset({"ALL_PASSED", "HAS_FAILURES", "INCOMPLETE"})
 _TEST_RESULT_STATUSES = frozenset({"PASSED", "FAILED", "TIMEOUT", "SKIPPED"})
 _UNMERGED_STATUS_CODES = frozenset({"DD", "AU", "UD", "UA", "DU", "AA", "UU"})
+_AUTHENTICATION_ERROR_MARKERS = (
+    "authentication failed",
+    "could not read username",
+    "invalid credentials",
+    "access denied",
+    "http 401",
+    "http 403",
+    "returned error: 401",
+    "returned error: 403",
+)
 
 
 class GitExecutorError(RuntimeError):
     """Raised when a local commit or push cannot be completed safely."""
+
+
+class GitCredentialError(GitExecutorError):
+    """Raised when the configured Git credential is missing or rejected."""
 
 
 class GitExecutorValidationError(ValueError):
@@ -130,7 +144,7 @@ def build_remediation_result(
     """Build and validate the terminal ``remediation_result_v1`` contract.
 
     The Git executor derives the committed files from its isolated workspace.
-    The caller supplies the draft-PR reference returned by the draft PR
+    The caller supplies the draft-PR reference returned by the repair-specific
     publisher and the publication decision returned by the
     deterministic policy gate. If ``status`` is omitted, a ``BLOCKED`` policy
     decision with incomplete or failed validation becomes
@@ -936,6 +950,9 @@ def _git_text(
     except (OSError, subprocess.TimeoutExpired) as error:
         raise GitExecutorError(f"Git could not {action}") from error
     if completed.returncode != 0:
+        stderr = getattr(completed, "stderr", "") or ""
+        if any(marker in stderr.casefold() for marker in _AUTHENTICATION_ERROR_MARKERS):
+            raise GitCredentialError(f"Git credentials could not {action}")
         raise GitExecutorError(f"Git could not {action}")
     return completed.stdout
 
@@ -1075,7 +1092,7 @@ def resolve_push_credential(
 
     resolved = env.get(var_name)
     if not resolved:
-        raise GitExecutorError(
+        raise GitCredentialError(
             f"resolved push credential for '{credential_ref}' was not found in the environment"
         )
     return resolved

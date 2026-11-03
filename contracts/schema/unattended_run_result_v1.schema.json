@@ -32,6 +32,7 @@
         "RECURSION_GUARD",
         "TIME_LIMIT",
         "TOKEN_LIMIT",
+        "TOOL_CALL_LIMIT",
         "INVALID_INPUT",
         "PREREQUISITE_MISSING",
         "CREDENTIAL_UNAVAILABLE",
@@ -200,7 +201,7 @@
     },
     {
       "if": { "properties": { "outcome": { "const": "LIMIT_REACHED" } }, "required": ["outcome"] },
-      "then": { "required": ["reason_code"], "properties": { "exit_code": { "const": 5 }, "reason_code": { "enum": ["TIME_LIMIT", "TOKEN_LIMIT"] } }, "not": { "required": ["draft_pr"] } }
+      "then": { "required": ["reason_code"], "properties": { "exit_code": { "const": 5 }, "reason_code": { "enum": ["TIME_LIMIT", "TOKEN_LIMIT", "TOOL_CALL_LIMIT"] } }, "not": { "required": ["draft_pr"] } }
     },
     {
       "if": { "properties": { "outcome": { "const": "ERROR" } }, "required": ["outcome"] },

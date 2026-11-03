@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -27,7 +28,7 @@ class RepairPRPublicationError(ValueError):
 
 
 class RepairPRClientError(OSError):
-    """Raised when a draft PR provider client cannot be configured."""
+    """Raised when a repair-specific provider client cannot be configured."""
 
 
 @dataclass(frozen=True)
@@ -43,13 +44,14 @@ class RepairPRRequest:
     base: str
     incident_id: str
     run_id: str
+    failure_signature: str | None = None
 
     @classmethod
     def from_mapping(cls, value: object) -> RepairPRRequest:
         """Accept only the neutral fields produced by Pipeline Guard."""
         if not isinstance(value, Mapping):
             raise RepairPRPublicationError("repair PR request must be an object")
-        expected = {
+        required = {
             "provider",
             "repository",
             "repository_owner",
@@ -61,7 +63,11 @@ class RepairPRRequest:
             "incident_id",
             "run_id",
         }
-        if set(value) != expected:
+        keys = frozenset(value)
+        if keys not in {
+            frozenset(required),
+            frozenset({*required, "failure_signature"}),
+        }:
             raise RepairPRPublicationError(
                 "repair PR request contains unsupported or missing fields"
             )
@@ -84,15 +90,22 @@ class RepairPRRequest:
             base=_required_text(value["base"], "base"),
             incident_id=_required_text(value["incident_id"], "incident_id"),
             run_id=_required_text(value["run_id"], "run_id"),
+            failure_signature=_optional_failure_signature(
+                value.get("failure_signature")
+            ),
         )
 
     @property
-    def visible_identity(self) -> tuple[str, str]:
+    def visible_identity(self) -> tuple[str, str, str | None]:
         """Return the incident and run identity visible in the PR body."""
         identity = _visible_identity(self.body)
         if identity is None:
             raise RepairPRPublicationError(
                 "repair PR body must contain non-empty 'ID:' and 'Run:' lines"
+            )
+        if identity[2] != self.failure_signature:
+            raise RepairPRPublicationError(
+                "repair PR body Signature line must match failure_signature"
             )
         return identity
 
@@ -313,6 +326,23 @@ def publish_request(
     return publish_or_reuse_draft(request, client=client).as_dict()
 
 
+def find_request(
+    value: object, *, client: object | None = None
+) -> dict[str, object] | None:
+    """Find a matching open repair draft without creating or closing anything."""
+    request = RepairPRRequest.from_mapping(value)
+    identity = request.visible_identity
+    try:
+        active_client = client if client is not None else _create_client(request)
+        _verify_repository_owner(active_client, request)
+        reference = _find_existing_draft(active_client, request, identity)
+    except RepairPRPublicationError:
+        raise
+    except (OSError, requests.RequestException, ValueError) as error:
+        raise RepairPRPublicationError("repair draft PR lookup failed") from error
+    return None if reference is None else reference.as_dict()
+
+
 def publish_or_reuse_draft(
     request: RepairPRRequest,
     *,
@@ -323,6 +353,11 @@ def publish_or_reuse_draft(
     try:
         active_client = client if client is not None else _create_client(request)
         _verify_repository_owner(active_client, request)
+        existing = _find_existing_draft(active_client, request, identity)
+        if existing is not None:
+            return existing
+        # Revalidate immediately before creation. The first lookup is an early
+        # idempotency optimization; this second lookup narrows the race window.
         existing = _find_existing_draft(active_client, request, identity)
         if existing is not None:
             return existing
@@ -363,7 +398,7 @@ def _create_client(request: RepairPRRequest) -> object:
 def _find_existing_draft(
     client: object,
     request: RepairPRRequest,
-    identity: tuple[str, str],
+    identity: tuple[str, str, str | None],
 ) -> RepairPRReference | None:
     records = _list_open_pull_requests(client, request)
     matching_non_draft = False
@@ -372,7 +407,7 @@ def _find_existing_draft(
             if _is_draft(record):
                 return _reference_from_record(record, request.provider, reused=True)
             matching_non_draft = True
-    if matching_non_draft:
+    if matching_non_draft and request.failure_signature is None:
         raise RepairPRPublicationError(
             "matching open repair PR exists but is not a draft; refusing to create another"
         )
@@ -433,15 +468,23 @@ def _create_draft(client: object, request: RepairPRRequest) -> Mapping[str, obje
 def _matches_request_identity(
     record: Mapping[str, object],
     request: RepairPRRequest,
-    identity: tuple[str, str],
+    identity: tuple[str, str, str | None],
 ) -> bool:
     source, destination = _branches(record, request.provider)
+    visible_identity = _visible_identity(_description(record, request.provider))
+    if request.failure_signature is None:
+        visible_identity_matches = visible_identity == identity
+    else:
+        visible_identity_matches = (
+            visible_identity is not None
+            and visible_identity[2] == request.failure_signature
+        )
     return (
         _record_text(record, "state") == _OPEN_STATES[request.provider]
         and _source_repository_matches(record, request)
         and source == request.branch
         and destination == request.base
-        and _visible_identity(_description(record, request.provider)) == identity
+        and visible_identity_matches
     )
 
 
@@ -480,17 +523,22 @@ def _description(record: Mapping[str, object], provider: str) -> str:
     return _record_text(record, field) or ""
 
 
-def _visible_identity(description: str) -> tuple[str, str] | None:
+def _visible_identity(description: str) -> tuple[str, str, str | None] | None:
     incident: str | None = None
     run: str | None = None
+    signature: str | None = None
     for line in description.splitlines():
         if line.startswith("ID: "):
             incident = _visible_identity_value(line.removeprefix("ID: "))
         elif line.startswith("Run: "):
             run = _visible_identity_value(line.removeprefix("Run: "))
+        elif line.startswith("Signature: "):
+            candidate = _visible_identity_value(line.removeprefix("Signature: "))
+            if re.fullmatch(r"sha256:[0-9a-f]{64}", candidate) is not None:
+                signature = candidate
     if not incident or not run:
         return None
-    return incident, run
+    return incident, run, signature
 
 
 def _visible_identity_value(value: str) -> str:
@@ -592,6 +640,19 @@ def _required_text(value: object, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise RepairPRPublicationError(f"{field} must be a non-empty string")
     return value.strip()
+
+
+def _optional_failure_signature(value: object) -> str | None:
+    if value is None:
+        return None
+    if (
+        not isinstance(value, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None
+    ):
+        raise RepairPRPublicationError(
+            "failure_signature must use sha256 with 64 lowercase hexadecimal digits"
+        )
+    return value
 
 
 def _record_text(record: Mapping[str, object], field: str) -> str | None:

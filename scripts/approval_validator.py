@@ -15,6 +15,8 @@ from typing import Any
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from scripts.approval_authenticator import verify_orchestrated_approval
+
 _SCHEMA_PATH = (
     Path(__file__).resolve().parents[1]
     / "contracts"
@@ -35,6 +37,8 @@ def validate_approval(
     expected_base_commit: str,
     max_age: timedelta,
     current_time: datetime | None = None,
+    unattended: bool = False,
+    shared_secret: bytes | None = None,
 ) -> dict[str, Any]:
     """Validate one approval against the exact remediation context.
 
@@ -42,9 +46,9 @@ def validate_approval(
     explicit policy rather than a hidden constant in the validator. ``current_time``
     may be injected for deterministic execution and tests.
 
-    This validator does not authenticate the approval source. An orchestrated
-    caller must verify the approval in its host adapter before calling this
-    function; an interactive consumer must enforce the local-only trust boundary.
+    In unattended mode, only authenticated policy approvals can authorize
+    remediation. Interactive callers retain the existing local trust boundary
+    and do not authenticate the approval source here.
     """
     context = {
         "expected_incident_id": expected_incident_id,
@@ -77,6 +81,21 @@ def validate_approval(
 
     if document["decision"] != "APPROVED":
         raise ApprovalValidationError("decision: remediation requires APPROVED")
+    if unattended:
+        if document.get("channel_type") != "policy":
+            raise ApprovalValidationError(
+                "channel_type: unattended remediation requires policy"
+            )
+        if shared_secret is None:
+            raise ApprovalValidationError(
+                "shared_secret is required for unattended remediation"
+            )
+        try:
+            document = verify_orchestrated_approval(
+                document, shared_secret=shared_secret
+            )
+        except ValueError as error:
+            raise ApprovalValidationError(str(error)) from error
     if document["incident_id"] != expected_incident_id:
         raise ApprovalValidationError(
             "incident_id: approval does not match the incident"

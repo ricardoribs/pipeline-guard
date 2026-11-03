@@ -1,8 +1,8 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["jsonschema>=4.0.0", "pyyaml>=6.0.3"]
+# dependencies = ["httpx>=0.27.0", "jsonschema>=4.0.0", "pyyaml>=6.0.3"]
 # ///
-"""Run constrained, non-interactive remediation authorship with Claude Code."""
+"""Run constrained, non-interactive remediation with selectable model backends."""
 
 from __future__ import annotations
 
@@ -11,22 +11,45 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
 import yaml
 
 try:  # Support both direct script execution and package-style imports.
     from .execution_budget import ExecutionBudgetExceeded
+    from .model_backend import (
+        HTTPClient,
+        ModelBackendConfigurationError,
+        ModelSettings,
+        resolve_model_settings,
+    )
+    from .openai_authoring import (
+        DirectAuthoringError,
+        DirectAuthoringLimitReached,
+        run_openai_authoring,
+    )
     from .redaction import redact_text
     from .workspace_executor import _WindowsProcessJob
 except ImportError:  # pragma: no cover - direct script execution
     from execution_budget import ExecutionBudgetExceeded
+    from model_backend import (
+        HTTPClient,
+        ModelBackendConfigurationError,
+        ModelSettings,
+        resolve_model_settings,
+    )
+    from openai_authoring import (
+        DirectAuthoringError,
+        DirectAuthoringLimitReached,
+        run_openai_authoring,
+    )
     from redaction import redact_text
     from workspace_executor import _WindowsProcessJob
 
@@ -35,6 +58,10 @@ _AGENT_NAME = "remediation-agent"
 _ALLOWED_TOOLS = ("Read", "Write", "Edit")
 _DEFAULT_MAX_TURNS = 8
 _DEFAULT_TERMINATION_GRACE_SECONDS = 5.0
+_IS_WINDOWS = os.name == "nt"
+_IS_LINUX = sys.platform.startswith("linux")
+_PROC_ROOT = Path("/proc")
+_DEAD_PROCESS_STATES = frozenset({"Z", "X", "x"})
 _MODEL_ENVIRONMENT = frozenset(
     {
         "ANTHROPIC_API_KEY",
@@ -56,6 +83,7 @@ _TOKEN_FIELDS = (
     "cache_creation_input_tokens",
     "cache_read_input_tokens",
 )
+_T = TypeVar("_T")
 
 
 class AuthoringRunnerError(RuntimeError):
@@ -63,7 +91,7 @@ class AuthoringRunnerError(RuntimeError):
 
 
 class AuthoringRunnerConfigurationError(AuthoringRunnerError, ValueError):
-    """Raised before starting Claude Code when the invocation is unsafe or incomplete."""
+    """Raised before starting a model when the invocation is unsafe or incomplete."""
 
 
 class AuthoringLimitReached(AuthoringRunnerError):
@@ -72,8 +100,10 @@ class AuthoringLimitReached(AuthoringRunnerError):
     outcome = "LIMIT_REACHED"
 
     def __init__(self, reason_code: str) -> None:
-        if reason_code not in {"TIME_LIMIT", "TOKEN_LIMIT"}:
-            raise ValueError("reason_code must be TIME_LIMIT or TOKEN_LIMIT")
+        if reason_code not in {"TIME_LIMIT", "TOKEN_LIMIT", "TOOL_CALL_LIMIT"}:
+            raise ValueError(
+                "reason_code must be TIME_LIMIT, TOKEN_LIMIT, or TOOL_CALL_LIMIT"
+            )
         self.reason_code = reason_code
         super().__init__(
             f"Authoring stopped because the {reason_code.lower()} was reached"
@@ -82,7 +112,7 @@ class AuthoringLimitReached(AuthoringRunnerError):
 
 @dataclass(frozen=True)
 class AuthoringResult:
-    """Sanitized Claude stream and its single terminal result event."""
+    """Sanitized authoring events and their single terminal result."""
 
     result: dict[str, Any]
     events: tuple[dict[str, Any], ...]
@@ -105,9 +135,14 @@ class AuthoringBudget(Protocol):
     @property
     def remaining_seconds(self) -> float: ...
 
+    @property
+    def remaining_tokens(self) -> int: ...
+
     def check(self) -> None: ...
 
     def record_tokens(self, tokens: int) -> None: ...
+
+    def call_tool(self, operation: Callable[[], _T]) -> _T: ...
 
 
 class ProcessJob(Protocol):
@@ -132,6 +167,8 @@ def run_authoring(
     plugin_root: Path = _PLUGIN_ROOT,
     claude_executable: str | None = None,
     model_environment: Mapping[str, str] | None = None,
+    model_settings: ModelSettings | None = None,
+    http_client: HTTPClient | None = None,
     termination_grace_seconds: float = _DEFAULT_TERMINATION_GRACE_SECONDS,
 ) -> AuthoringResult:
     """Execute the trusted remediation agent without inheriting host credentials.
@@ -160,6 +197,27 @@ def run_authoring(
         )
 
     _assert_unprivileged_process()
+    model_source = os.environ if model_environment is None else model_environment
+    try:
+        settings = model_settings or resolve_model_settings(
+            provider="anthropic",
+            model=model_source.get("ANTHROPIC_MODEL") or "sonnet",
+            environment=model_source,
+        )
+    except ModelBackendConfigurationError as error:
+        raise AuthoringRunnerConfigurationError(str(error)) from error
+    if settings.provider == "openai-compatible":
+        return _run_openai_compatible_authoring(
+            workspace_path,
+            prompt=normalized_prompt,
+            approved_read_paths=normalized_paths,
+            budget=budget,
+            max_turns=normalized_turns,
+            plugin_root=resolved_plugin_root,
+            settings=settings,
+            http_client=http_client,
+        )
+
     environment = workspace.authorship_environment()
     if not isinstance(environment, dict) or not all(
         isinstance(name, str) and isinstance(value, str)
@@ -168,8 +226,19 @@ def run_authoring(
         raise AuthoringRunnerConfigurationError(
             "workspace.authorship_environment() must return string environment entries"
         )
-    model_source = os.environ if model_environment is None else model_environment
-    model_variables = _filtered_model_environment(model_source)
+    model_variables = _filtered_model_environment(
+        model_source, require_credential=settings.api_key is None
+    )
+    model_variables["ANTHROPIC_MODEL"] = settings.model
+    if settings.base_url is not None:
+        model_variables["ANTHROPIC_BASE_URL"] = settings.base_url
+    if settings.api_key is not None:
+        credential_variable = (
+            "ANTHROPIC_API_KEY"
+            if settings.credential_kind == "api-key"
+            else "ANTHROPIC_AUTH_TOKEN"
+        )
+        model_variables[credential_variable] = settings.api_key
     environment.update(model_variables)
     environment.update(
         {
@@ -191,6 +260,15 @@ def run_authoring(
         budget.check()
     except ExecutionBudgetExceeded as error:
         raise _limit_from_budget(error) from error
+    token_limit = budget.remaining_tokens
+    if token_limit <= 0:
+        raise AuthoringLimitReached("TOKEN_LIMIT")
+    effective_max_turns = min(normalized_turns, token_limit)
+    response_token_limit = max(1, token_limit // effective_max_turns)
+    # Bound generated tokens across every allowed turn before starting Claude.
+    # Aggregate usage, including input and cache tokens, is checked below, so
+    # an over-budget process cannot authorize or publish workspace changes.
+    environment["CLAUDE_CODE_MAX_OUTPUT_TOKENS"] = str(response_token_limit)
     timeout = budget.remaining_seconds
     if timeout <= 0:
         raise AuthoringLimitReached("TIME_LIMIT")
@@ -210,14 +288,14 @@ def run_authoring(
             trusted_root,
             plugin_root=resolved_plugin_root,
             model_environment=model_variables,
-            max_turns=normalized_turns,
+            max_turns=effective_max_turns,
         )
         command = _authoring_command(
             executable,
             plugin_root=resolved_plugin_root,
             settings_path=settings_path,
             agents_path=agents_path,
-            max_turns=normalized_turns,
+            max_turns=effective_max_turns,
             prompt=normalized_prompt,
         )
         stdout, stderr, return_code, timed_out = _run_process(
@@ -266,7 +344,70 @@ def run_authoring(
     )
 
 
-def _filtered_model_environment(source: Mapping[str, str]) -> dict[str, str]:
+def _run_openai_compatible_authoring(
+    workspace_path: Path,
+    *,
+    prompt: str,
+    approved_read_paths: Sequence[str],
+    budget: AuthoringBudget,
+    max_turns: int,
+    plugin_root: Path,
+    settings: ModelSettings,
+    http_client: HTTPClient | None,
+) -> AuthoringResult:
+    definition = _agent_definition(
+        plugin_root,
+        model_environment={"ANTHROPIC_MODEL": settings.model},
+        max_turns=max_turns,
+    )
+    agent_prompt = definition[_AGENT_NAME].get("prompt")
+    if not isinstance(agent_prompt, str) or not agent_prompt:
+        raise AuthoringRunnerConfigurationError(
+            "remediation-agent prompt must not be empty"
+        )
+    try:
+        direct = run_openai_authoring(
+            workspace_path,
+            prompt=prompt,
+            agent_prompt=agent_prompt,
+            approved_read_paths=approved_read_paths,
+            settings=settings,
+            budget=budget,
+            max_turns=max_turns,
+            client=http_client,
+        )
+    except DirectAuthoringLimitReached as error:
+        raise AuthoringLimitReached(error.reason_code) from error
+    except DirectAuthoringError as error:
+        raise AuthoringRunnerError(str(error)) from error
+
+    secrets = settings.secret_values
+    sanitized_result = _sanitize_document(direct.result, secrets)
+    sanitized_events = tuple(
+        _sanitize_document(event, secrets) for event in direct.events
+    )
+    return AuthoringResult(
+        result=sanitized_result,
+        events=sanitized_events,
+        stderr="",
+        total_tokens=direct.total_tokens,
+    )
+
+
+def _sanitize_document(
+    document: Mapping[str, Any], secrets: Sequence[str]
+) -> dict[str, Any]:
+    serialized = json.dumps(document, ensure_ascii=False)
+    sanitized = _sanitize_output(serialized, secrets)
+    parsed = json.loads(sanitized)
+    if not isinstance(parsed, dict):
+        raise AuthoringRunnerError("sanitized authoring event must be an object")
+    return parsed
+
+
+def _filtered_model_environment(
+    source: Mapping[str, str], *, require_credential: bool = True
+) -> dict[str, str]:
     environment: dict[str, str] = {}
     for name, value in source.items():
         normalized_name = name.upper()
@@ -277,8 +418,10 @@ def _filtered_model_environment(source: Mapping[str, str]) -> dict[str, str]:
                 f"model environment variable {normalized_name} must be a string"
             )
         environment[normalized_name] = value
-    if not environment.get("ANTHROPIC_AUTH_TOKEN") and not environment.get(
-        "ANTHROPIC_API_KEY"
+    if (
+        require_credential
+        and not environment.get("ANTHROPIC_AUTH_TOKEN")
+        and not environment.get("ANTHROPIC_API_KEY")
     ):
         raise AuthoringRunnerConfigurationError(
             "ANTHROPIC_AUTH_TOKEN or ANTHROPIC_API_KEY is required for authoring"
@@ -468,7 +611,7 @@ def _run_process(
             "cwd": cwd,
             "env": environment,
         }
-        if os.name == "nt":
+        if _IS_WINDOWS:
             process_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             process_options["start_new_session"] = True
@@ -506,35 +649,88 @@ def _stop_completed_process_group(
     job: ProcessJob | None,
     grace_seconds: float,
 ) -> None:
-    """Stop descendants that outlive a normally completed process leader."""
-
-    if os.name == "nt":
-        if job is not None:
-            job.terminate()
-            job.wait_empty()
-        return
+    """Stop descendants that remain after the process leader exits or times out."""
 
     _terminate_process_group(process, job)
+    if job is not None:
+        job.wait_empty()
+        return
+    if _IS_WINDOWS:
+        return
+
     if _wait_for_process_group_exit(process.pid, grace_seconds):
         return
     with suppress(ProcessLookupError):
         os.killpg(process.pid, signal.SIGKILL)
     if not _wait_for_process_group_exit(process.pid, grace_seconds):
         raise AuthoringRunnerError(
-            "Authoring process group did not exit after completion"
+            "Authoring process group did not exit after termination"
         )
 
 
 def _wait_for_process_group_exit(process_group_id: int, timeout: float) -> bool:
     deadline = time.monotonic() + timeout
     while True:
-        try:
-            os.killpg(process_group_id, 0)
-        except ProcessLookupError:
+        if not _process_group_has_live_members(process_group_id):
             return True
         if time.monotonic() >= deadline:
             return False
         time.sleep(min(0.02, max(0.0, deadline - time.monotonic())))
+
+
+def _process_group_has_live_members(process_group_id: int) -> bool:
+    if _IS_LINUX:
+        linux_result = _linux_process_group_has_live_members(process_group_id)
+        if linux_result is not None:
+            return linux_result
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _linux_process_group_has_live_members(process_group_id: int) -> bool | None:
+    """Return live membership from /proc, ignoring zombies; None means unavailable."""
+
+    try:
+        process_directories = tuple(_PROC_ROOT.iterdir())
+    except OSError:
+        return None
+
+    for process_directory in process_directories:
+        if not process_directory.name.isdecimal():
+            continue
+        try:
+            raw_stat = (process_directory / "stat").read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+        except OSError:
+            # Processes can disappear between listing /proc and reading stat.
+            # Descendants in this group share our uid and remain readable.
+            continue
+        parsed_stat = _parse_linux_process_stat(raw_stat)
+        if parsed_stat is None:
+            continue
+        state, process_group = parsed_stat
+        if process_group == process_group_id and state not in _DEAD_PROCESS_STATES:
+            return True
+    return False
+
+
+def _parse_linux_process_stat(raw_stat: str) -> tuple[str, int] | None:
+    command_end = raw_stat.rfind(")")
+    if command_end < 0:
+        return None
+    fields = raw_stat[command_end + 1 :].split()
+    if len(fields) < 3:
+        return None
+    try:
+        return fields[0], int(fields[2])
+    except ValueError:
+        return None
 
 
 def _stop_timed_out_process(
@@ -548,30 +744,20 @@ def _stop_timed_out_process(
         interrupted_output = process.communicate(timeout=grace_seconds)
     except subprocess.TimeoutExpired:
         interrupted_output = None
-    _terminate_process_group(process, job)
+    _stop_completed_process_group(process, job=job, grace_seconds=grace_seconds)
     if interrupted_output is not None:
-        if job is not None:
-            job.wait_empty()
         return interrupted_output
     try:
         output = process.communicate(timeout=grace_seconds)
     except subprocess.TimeoutExpired:
-        if job is not None:
-            job.terminate()
-        elif os.name == "nt":
-            process.kill()
-        else:
-            with suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
+        process.kill()
         output = process.communicate()
-    if job is not None:
-        job.wait_empty()
     return output
 
 
 def _interrupt_process_group(process: subprocess.Popen[str]) -> None:
     try:
-        if os.name == "nt":
+        if _IS_WINDOWS:
             process.send_signal(signal.CTRL_BREAK_EVENT)
         else:
             os.killpg(process.pid, signal.SIGINT)
@@ -582,7 +768,7 @@ def _interrupt_process_group(process: subprocess.Popen[str]) -> None:
 def _terminate_process_group(
     process: subprocess.Popen[str], job: ProcessJob | None
 ) -> None:
-    if os.name == "nt":
+    if _IS_WINDOWS:
         if process.poll() is None:
             with suppress(OSError):
                 process.terminate()
@@ -594,7 +780,7 @@ def _terminate_process_group(
 
 
 def _create_process_job() -> ProcessJob | None:
-    return _WindowsProcessJob() if os.name == "nt" else None
+    return _WindowsProcessJob() if _IS_WINDOWS else None
 
 
 def _parse_stream(stdout: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -686,6 +872,8 @@ def _assert_unprivileged_process() -> None:
 def _limit_from_budget(error: ExecutionBudgetExceeded) -> AuthoringLimitReached:
     if error.reason == "max_seconds":
         return AuthoringLimitReached("TIME_LIMIT")
+    if error.reason == "max_tool_calls":
+        return AuthoringLimitReached("TOOL_CALL_LIMIT")
     return AuthoringLimitReached("TOKEN_LIMIT")
 
 

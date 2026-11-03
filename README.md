@@ -1,19 +1,24 @@
 # Pipeline Guard
 
-Evidence-grounded diagnosis and policy-gated remediation for failed data pipelines in Claude Code.
+Evidence-grounded diagnosis and policy-gated remediation for failed data pipelines, available
+interactively in Claude Code and through selectable unattended model backends.
 
 Pipeline Guard validates a normalized incident, collects traceable evidence,
 asks a tool-free diagnosis agent to classify the failure, validates every
 citation, and applies a deterministic eligibility policy. For an eligible and
-explicitly approved code failure, it prepares an isolated workspace, validates
+verifiably authorized code failure, it prepares an isolated workspace, validates
 the patch, commits and pushes the incident branch, and publishes a draft pull
 request through a deterministic, draft PR publishing boundary.
 
-> **Current scope:** diagnosis remains read-only. Remediation requires a
-> verified approval bound to the diagnosis and base commit, edits only
-> configured paths in an isolated workspace, and can publish only draft pull
-> requests. The plugin never approves, merges, deploys, changes warehouse data,
-> or reruns the failed pipeline.
+> **Current scope:** diagnosis does not modify the repository or rerun the failed
+> pipeline. Remediation requires verified authorization bound to the incident,
+> diagnosis, and base commit; edits only configured paths in an isolated workspace;
+> runs only project-declared validation commands; and can commit and push only a
+> repair branch to create or reuse a draft pull request. Pipeline Guard has no
+> built-in operation to approve or merge pull requests, deploy changes, or rerun the
+> failed pipeline. Project-declared validation commands must not perform those
+> operations and must use an isolated, non-production target when they can modify
+> external systems.
 
 ## Table of Contents
 
@@ -57,34 +62,35 @@ flowchart TD
     A --> B --> C --> D --> E --> F --> G --> H
 ```
 
-For an eligible `CODE` failure, the approved remediation flow continues with:
+For an eligible `CODE` failure, the authorized remediation flow continues with:
 
 ```mermaid
 flowchart TD
-    A["Validate explicit approval_input_v1<br/>Bound to incident, diagnosis hash, and base commit"]
+    A["Validate approval_input_v1 authorization<br/>Bound to incident, diagnosis hash, and base commit"]
     B["Prepare isolated incident branch<br/>Keep Git credentials away from the authoring agent"]
     C["Author the minimal correction<br/>Enforce configured path, extension, file, and line limits"]
     D["Validate patch hash and run allowlisted project checks"]
-    E["Commit and push only the approved incident branch<br/>Use a strict refspec"]
+    E["Commit and push only the authorized incident branch<br/>Use a strict refspec"]
     F["Build a neutral draft-PR request<br/>Revalidate the pushed commit"]
     G["Publish or reuse the Bitbucket/GitHub draft<br/>Return remediation_result_v1"]
 
     A --> B --> C --> D --> E --> F --> G
 ```
 
-The diagnosis CLI supports interactive and headless use, while the deterministic
-publication boundary can also be invoked directly by an orchestrator.
+The `diagnose` skill supports interactive use, while `diagnose_cli.py` provides
+the canonical headless entrypoint. The deterministic publication boundary can
+also be invoked directly by an orchestrator.
 
 ## Agents
 
 | Agent | Role | Tools |
 |---|---|---|
 | `diagnosis-agent` | Produces a structured diagnosis using only the validated incident and collected evidence | None |
-| `remediation-agent` | Authors the smallest approved code correction inside the isolated workspace | Restricted file and command tools controlled by the remediation flow |
+| `remediation-agent` | Authors the smallest authorized code correction inside the isolated workspace | Restricted read, write, and edit file tools controlled by the remediation flow |
 
 The diagnosis agent cannot read files, run commands, access a network service,
 or change the consumer project. The remediation agent receives only the
-validated context required to author the approved fix. It cannot access Git or
+validated context required to author the authorized fix. It cannot access Git or
 provider credentials, publish a PR, merge, or deploy. Adapter-specific details
 stay isolated under `adapter_details.<adapter-name>`.
 
@@ -94,7 +100,7 @@ stay isolated under `adapter_details.<adapter-name>`.
 |---|---|---|
 | `pipeline-guard-setup` | Installing or configuring the plugin in a consumer project | Materializes and validates `config/pipeline-guard.yaml` from the `generic` or `dbt` preset |
 | `diagnose` | Investigating or explaining a failed pipeline or dbt run | Runs the complete read-only flow and returns a validated diagnosis, eligibility decision, limitations, and neutral report |
-| `remediate` | Applying an approved correction for an eligible incident | Verifies approval, prepares the workspace, validates and pushes the patch, and orchestrates draft publication |
+| `remediate` | Applying an authorized correction for an eligible incident | Verifies authorization, prepares the workspace, validates and pushes the patch, and orchestrates draft publication |
 | `publish-draft-pr` | Publishing or reusing the draft after the incident branch is pushed | Revalidates the remote commit and tests, then creates or reuses a Bitbucket or GitHub draft PR |
 
 Skills are selected from user intent. You can ask naturally, for example:
@@ -131,19 +137,21 @@ The closed adapter registry rejects unregistered names.
 
 ## Prerequisites
 
-- Claude Code 2.1.295 or later.
+- Claude Code 2.1.295 or later for interactive plugin use and for the unattended
+  `anthropic` authoring backend. OpenAI-compatible unattended backends do not
+  launch Claude Code.
 - `uv` must be installed and available on `PATH`.
 - Git must be installed and available on `PATH` for workspace, commit, and push operations.
 - A writable `CLAUDE_PLUGIN_DATA` directory. Claude Code provides this to an
   installed plugin; set it explicitly when invoking the headless CLI manually.
-- An Anthropic-compatible model endpoint available to the diagnosis runner.
-- `ANTHROPIC_MODEL` set to the model or model-service identifier, unless
-  `--model` is passed to the CLI.
-- Authentication configured for that endpoint, such as
-  `ANTHROPIC_API_KEY` for Anthropic or `ANTHROPIC_AUTH_TOKEN` for a compatible
-  gateway. Use `ANTHROPIC_BASE_URL` when the endpoint is not Anthropic's
-  default.
-- Remediation requires a verified approval, an HTTPS repository URL, allowlisted
+- A configured model backend. The provider profile defaults to Anthropic, but
+  its model and credentials must still be configured. Unattended runs
+  may instead select `databricks`, `openai`, `gemini`, `ollama`, or a custom
+  `openai-compatible` Chat Completions endpoint through `runtime.model` or
+  `--model-provider`.
+- The selected model identifier and credential supplied through configuration
+  references or environment. Ollama may run without an API key.
+- Remediation requires verified authorization, an HTTPS repository URL, allowlisted
   validation commands, and a credential reference in the project configuration.
 - Draft publication supports Bitbucket Cloud and GitHub. Provider credentials
   must be supplied through environment variables, never through the project
@@ -153,7 +161,8 @@ Verify the local runtime:
 
 ```bash
 uv --version
-claude --version
+git --version
+claude --version # required only for interactive use or the anthropic authoring backend
 ```
 
 Never store a literal credential in `config/pipeline-guard.yaml`, an incident
@@ -243,7 +252,8 @@ uv run /path/to/pipeline-guard/scripts/diagnose_cli.py \
 ```
 
 Omit the final file argument to read the same JSON contract from standard input.
-Use `--model "<model>"` only when overriding `ANTHROPIC_MODEL`.
+Use `--model-provider` and `--model` to override `runtime.model` or the
+provider-specific environment variables.
 
 ### 4. Interpret the exit code
 
@@ -257,9 +267,9 @@ Use `--model "<model>"` only when overriding `ANTHROPIC_MODEL`.
 Exit code `3` is a controlled result, not an invitation to infer a missing
 cause.
 
-### 5. Remediate an approved incident
+### 5. Remediate an interactively approved incident
 
-Remediation is available only after diagnosis returns
+In the interactive skill flow, remediation is available only after diagnosis returns
 `ELIGIBLE_FOR_REMEDIATION` and a human approval is recorded in an
 `approval_input_v1` bound to the same incident, diagnosis hash, and base commit.
 
@@ -281,7 +291,7 @@ validation, force-push, merge, deploy, or expose credentials.
 ### 6. Run the publication boundary non-interactively
 
 An orchestrator may execute the final deterministic publication stage directly
-after the approved incident branch is pushed. The input JSON contains only the
+after the authorized incident branch is pushed. The input JSON contains only the
 neutral request, incident identity, run identity, and isolated workspace path:
 
 ```json
@@ -310,7 +320,7 @@ uv run /path/to/pipeline-guard/scripts/pr_publication.py \
 The script accepts UTF-8 JSON with or without a byte-order mark. It verifies the
 remote incident commit, requires a clean matching workspace, re-runs the
 allowlisted validation commands, applies the deterministic publication policy,
-and only then invokes the private repair publisher. It returns `BLOCKED`,
+and only then invokes the private draft publisher. It returns `BLOCKED`,
 `VALIDATED`, or `PUBLISHED_UNVALIDATED` together with the authoritative test
 result and, when published, the draft PR `id` and `url`.
 
@@ -333,6 +343,7 @@ Both conform to
 | `validation` | Declares the allowlisted commands executed before commit and repeated before publication |
 | `safety` | Defines editable paths and extensions, sensitive paths, and file/line limits enforced during remediation |
 | `remediation` | Controls whether failed or incomplete validation may still produce a clearly marked unvalidated draft |
+| `unattended` | Controls non-interactive remediation opt-in, service identity, policy authorization, draft target, and run limits |
 | `eligibility` | Configures the deterministic post-diagnosis policy |
 | `runtime.execution_budget` | Limits tool calls, elapsed seconds, and total model tokens |
 | `runtime.artifact_store` | Selects artifact storage; the headless diagnosis CLI currently requires `local` |
@@ -409,19 +420,27 @@ creating a conflicting duplicate.
 
 ## Remediation and Draft PRs
 
-Pipeline Guard accepts only a validated, eligible, and explicitly approved
-remediation. The approval is checked outside the model and is bound to:
+Pipeline Guard accepts only a validated, eligible, and verifiably authorized
+remediation. The authorization is checked outside the model and is bound to:
 
 - `incident_id`;
 - the canonical diagnosis hash;
 - the exact repository base commit;
-- the approving actor and positive approval lifetime.
+- the authorizing actor and positive authorization lifetime.
+
+The remediation model has only bounded file tools and cannot access a warehouse.
+Project-declared validation commands run separately and are executed as written;
+Pipeline Guard verifies that they were declared and records their results, but does
+not infer their external side effects. Commands such as `dbt build` must therefore
+use an isolated, non-production target with least-privilege credentials. Validation
+commands must not approve or merge pull requests, deploy to production, or rerun the
+failed host pipeline.
 
 The terminal result conforms to
 [`remediation_result_v1`](contracts/schema/remediation_result_v1.schema.json).
 A successful publication has `status: DRAFT_PR_PUBLISHED` and includes:
 
-- the approved base commit and pushed incident commit;
+- the authorized base commit and pushed incident commit;
 - changed files and line counts derived from Git;
 - the canonical SHA-256 patch hash;
 - the authoritative publication-time test results;
@@ -453,46 +472,91 @@ operations needed to locate, create, reuse, or safely close the draft PR
 produced by this remediation flow. It is not a general pull-request management
 API.
 
-Draft identity is deterministic. Reuse requires all of the following to match:
+Draft identity is deterministic. Reuse always requires all of the following to
+match:
 
 - provider repository owner and repository name;
 - source repository, not only the source branch name;
 - source branch and destination branch;
-- visible `ID:` and `Run:` rows in the PR body;
 - open draft state.
 
-A retry with the same identity returns the existing draft. A matching open
-non-draft blocks duplicate publication. If a provider ignores `draft=true`, the
-publisher attempts to close the unsafe PR and fails explicitly.
+Interactive publication additionally matches the visible `ID:` and `Run:` rows.
+Unattended publication matches the stable visible `Signature:` row derived from
+repository, pipeline, failed commit, and target branch; its `ID:` and `Run:` rows
+remain trace metadata and may differ on a later host retry.
+
+A retry with the same identity returns the existing draft. In the interactive
+flow, a matching open non-draft blocks duplicate publication. The stronger
+unattended identity ignores non-drafts and only reuses an open draft with the
+complete signature. If a provider ignores `draft=true`, the publisher attempts
+to close the unsafe PR and fails explicitly.
 
 ## Unattended Execution
 
-Unattended execution is the current development track for running the complete
-repair flow in isolated automation environments. It extends the existing
-diagnosis, remediation, and standalone draft-publication boundaries; it does
-not introduce a dependency on another plugin.
+Unattended execution runs the complete repair flow in isolated automation
+environments. It extends the existing diagnosis, remediation, and standalone
+draft-publication boundaries; it does not introduce a dependency on another
+plugin.
 
-The planned unattended entrypoint will:
+The unattended entrypoint:
 
 - expose one host-neutral command with an explicit `--mode unattended`;
 - execute without interactive questions or confirmations;
 - authorize remediation through versioned project policy and a service identity;
-- use an isolated, disposable workspace for every run;
+- use an isolated, managed workspace, retaining a clean committed workspace when
+  publication must be resumed safely;
 - return a versioned machine-readable result, a human summary, and stable exit codes;
 - publish or reuse the draft PR through Pipeline Guard's own deterministic boundary;
 - support Databricks Jobs, Bitbucket Pipelines, Airflow, and other orchestrators
   without embedding host-specific workflow logic in the plugin.
 
-The single-command unattended CLI and host deployment guides are still being
-implemented. Until they are available, `diagnose_cli.py` and
-`pr_publication.py` remain separate entrypoints and should not be presented as
-the final unattended contract.
+Start with the [complete unattended guide](docs/unattended/README.md), then
+choose the [Databricks](docs/unattended/databricks.md),
+[Bitbucket Pipelines](docs/unattended/bitbucket-pipelines.md), or
+[Airflow](docs/unattended/airflow.md) host guide. The implementation is
+host-neutral, but the host-specific sandbox validations remain mandatory before
+production adoption; each guide states its current validation status.
+
+```bash
+uv run /path/to/pipeline-guard/scripts/unattended_cli.py \
+  --mode unattended \
+  --config ./config/pipeline-guard.yaml \
+  --project-root . \
+  --output-dir /retained/pipeline-guard/output \
+  --authorization-state-dir /retained/pipeline-guard/authorization-state \
+  ./incident.json
+```
+
+The provider profile defaults to Anthropic/Claude Code; the model, endpoint, and
+credentials must still satisfy that profile. To use another backend, configure
+it without storing a literal credential:
+
+```yaml
+runtime:
+  model:
+    provider: ollama
+    name: llama3.3
+    base_url: http://127.0.0.1:11434/v1
+```
+
+Provider profiles are `anthropic`, `databricks`, `openai`, `gemini`, `ollama`, and
+`openai-compatible`. The custom profile requires `base_url`; remediation also
+requires that the endpoint implement Chat Completions function tools.
+
+Provider and model selection prefer CLI overrides, then `runtime.model`, then
+environment variables. Base URLs and credentials use configured references plus
+the applicable generic or provider-specific fallbacks.
+See the [unattended model table](docs/unattended/README.md#model-backend) for the
+exact variables and defaults.
 
 ## Runtime Compatibility
 
-Pipeline Guard requires Claude Code 2.1.295 or later. Its diagnosis redaction
-hooks rely on `onFailure: "block"` to fail closed when a hook errors or times
-out; earlier Claude Code versions do not provide that guarantee.
+Interactive Pipeline Guard and the unattended `anthropic` authoring backend
+require Claude Code 2.1.295 or later. Its diagnosis redaction hooks rely on
+`onFailure: "block"` to fail closed when a hook errors or times out; earlier
+Claude Code versions do not provide that guarantee. OpenAI-compatible
+unattended authoring enforces the same path policy directly and exposes only
+bounded read, write, and edit tools; it does not require the Claude executable.
 
 Claude Code does not support `matcher` on `UserPromptSubmit`, and its `if` field
 is evaluated only for tool events. Consequently, the prompt-guard process runs
@@ -545,7 +609,7 @@ Additional safety properties:
 - execution budgets limit tool calls, elapsed time, and tokens;
 - invalid, insufficient, conflicting, or exhausted runs stop safely;
 - diagnosis performs no project, Git, warehouse, deployment, or remediation writes;
-- remediation writes only inside the isolated workspace, pushes only the approved incident branch, and
+- remediation writes only inside the isolated workspace, pushes only the authorized incident branch, and
   publishes only a draft PR after deterministic revalidation.
 
 ## Architecture
@@ -570,7 +634,7 @@ flowchart LR
     PV --> GC[Deterministic commit and push]
     GC --> NR[Neutral draft PR request]
     NR --> RP[Remote commit and test revalidation]
-    RP -->|policy approved| PP[Private Bitbucket or GitHub repair publisher]
+    RP -->|policy approved| PP[Private Bitbucket or GitHub draft publisher]
     PP --> PR[Draft PR id and URL]
     PR --> RR[remediation_result_v1]
 
@@ -591,7 +655,7 @@ boundary and does not require another plugin.
 
 Prepared incident workspaces are retained under the `parent_dir` supplied to
 `prepare_workspace`; when omitted, the system temporary directory is used.
-Before deleting a cache with commits beyond its approved base,
+Before deleting a cache with commits beyond its authorized base,
 `discard_prepared_workspace` fetches all branches from the configured `origin`
 and refuses to remove commits absent from those branches. Preserve or push those
 commits, or pass `confirm_unpushed_commits=True` after reviewing and accepting
@@ -611,13 +675,16 @@ temporary directory is used).
 | `.claude-plugin/plugin.json` | Registers the plugin, four skills, and two agents |
 | `skills/pipeline-guard-setup/SKILL.md` | Materializes and validates consumer configuration |
 | `skills/diagnose/SKILL.md` | Routes interactive diagnosis to the canonical entrypoint |
-| `skills/remediate/SKILL.md` | Orchestrates the approved remediation flow |
+| `skills/remediate/SKILL.md` | Orchestrates the authorized remediation flow |
 | `skills/publish-draft-pr/SKILL.md` | Runs the deterministic standalone publication boundary |
 | `agents/diagnosis-agent.md` | Tool-free, evidence-grounded diagnosis prompt |
-| `agents/remediation-agent.md` | Authors the minimal approved fix inside the isolated workspace |
+| `agents/remediation-agent.md` | Authors the minimal authorized fix inside the isolated workspace |
 | `hooks/hooks.json` | Registers fail-closed prompt and tool-input redaction |
 | `hooks/redact.py` | Claude Code hook entrypoint |
-| `scripts/diagnose_cli.py` | Canonical interactive and headless diagnosis flow |
+| `scripts/diagnose_cli.py` | Canonical headless diagnosis flow used by interactive and automated callers |
+| `scripts/model_backend.py` | Resolves Anthropic and OpenAI-compatible model profiles and sanitizes transport failures |
+| `scripts/openai_authoring.py` | Runs the bounded file-tool loop for OpenAI-compatible remediation models |
+| `scripts/authoring_runner.py` | Dispatches remediation to Claude Code or the direct OpenAI-compatible tool loop |
 | `scripts/validate_config.py` | Schema, registry, credential-reference, and semantic configuration validation |
 | `scripts/incident_validator.py` | Validates and normalizes `incident_input_v1` |
 | `adapters/registry.py` | Closed registry for pipeline adapters |
@@ -631,13 +698,20 @@ temporary directory is used).
 | `scripts/workspace_executor.py` | Creates, reuses, audits, and safely discards isolated workspaces |
 | `scripts/patch_validator.py` | Enforces editable paths, extensions, limits, and patch hashing |
 | `scripts/test_executor.py` | Runs allowlisted validation commands with deterministic results |
-| `scripts/git_executor.py` | Commits and pushes only the approved incident branch |
+| `scripts/git_executor.py` | Commits and pushes only the authorized incident branch |
 | `scripts/pr_request_builder.py` | Builds the credential-free neutral draft request |
 | `scripts/pr_policy_gate.py` | Decides whether validated or unvalidated publication is allowed |
 | `scripts/pr_publication.py` | Revalidates the remote commit and tests before publication |
+| `scripts/policy_authorization.py` | Issues, authenticates, and consumes signed single-use policy authorizations |
+| `scripts/unattended_preflight.py` | Validates runtime, model, credential, Git-provider, and storage prerequisites before unattended execution |
+| `scripts/unattended_cli.py` | Complete non-interactive diagnosis, remediation, and result orchestration |
+| `scripts/failure_signature.py` | Derives the failure signature and deterministic remediation branch |
+| `scripts/unattended_result.py` | Sanitizes, validates, hashes, and retains unattended terminal output |
 | `scripts/draft_pr_publisher.py` | Creates or reuses Pipeline Guard drafts on Bitbucket or GitHub |
+| `contracts/schema/approval_input_v1.policy_profile.schema.json` | Constrains the unattended signed-policy extension to the approval contract |
 | `contracts/schema/` | Versioned workflow and adapter JSON Schemas |
 | `config/presets/` | Generic and dbt starter configurations |
+| `docs/unattended/` | Host-neutral flow, support matrix, reference prompt, and host guides |
 
 ## Validation
 
@@ -647,7 +721,7 @@ From the repository root, run the offline plugin suite:
 uv run --python 3.12 --with pytest --with anthropic --with jsonschema --with pyyaml --with requests --with httpx pytest -m "not api" tests/pipeline-guard tests/specs -q
 uv run ruff format --check .
 uv run ruff check .
-uv run basedpyright .
+uv run basedpyright
 claude plugin validate --strict .
 ```
 
@@ -675,18 +749,21 @@ uv run pytest \
   -q
 ```
 
-Trigger tests for the remediation skills:
+Focused remediation and unattended-flow verification:
 
 ```bash
-uv run pytest -m api tests/skills/test_all_skills.py \
-  -k "remediate or publish-draft-pr" -v
+uv run pytest \
+  tests/pipeline-guard/unit/test_remediation_agent.py \
+  tests/pipeline-guard/unit/test_unattended_cli.py \
+  tests/pipeline-guard/integration/test_unattended_flow.py \
+  -q
 ```
 
 ## Current Limitations
 
 - The registered pipeline adapters are currently `mock` and `dbt`.
-- Automated remediation is limited to eligible `CODE` failures with an explicit,
-  verified approval and a patch inside configured safety boundaries.
+- Automated remediation is limited to eligible `CODE` failures with verified
+  authorization and a patch inside configured safety boundaries.
 - Hosted draft publication currently supports Bitbucket Cloud and GitHub only.
 - The plugin creates or reuses drafts only; approval, reviewer assignment,
   merge, deployment, and generic pull-request administration remain out of scope.
@@ -695,8 +772,14 @@ uv run pytest -m api tests/skills/test_all_skills.py \
 - The headless CLI currently requires the local artifact store.
 - The dbt adapter reads only incident-declared `run_results.json` and
   `manifest.json` from the configured project's `target/` directory.
-- The diagnosis model must be reachable through an Anthropic-compatible
-  endpoint.
+- The diagnosis model must be reachable through Anthropic or an
+  OpenAI-compatible Chat Completions endpoint. Direct unattended remediation
+  additionally requires function-tool support from that endpoint.
+- Project-declared validation commands may have external side effects. Pipeline
+  Guard does not inspect their semantics, so commands that can write to a warehouse
+  or another service must use isolated, non-production targets and least-privilege
+  credentials; they must not approve or merge pull requests, deploy to production,
+  or rerun the failed host pipeline.
 - Sanitization recognizes labeled sensitive values and known secret formats;
   arbitrary unlabeled opaque secrets cannot be detected reliably.
 - Diagnosis has no dependency on Slack, Airflow, a Git host, or a live warehouse.

@@ -37,6 +37,16 @@ class ArtifactStore(Protocol):
 
 
 @runtime_checkable
+class DurableArtifactStore(ArtifactStore, Protocol):
+    """Artifact store that explicitly promises cross-execution persistence."""
+
+    @property
+    def is_durable(self) -> bool:
+        """Return whether artifacts persist across isolated executions."""
+        ...
+
+
+@runtime_checkable
 class ArtifactSession(ArtifactStore, Protocol):
     """Temporary artifact scope that expires its new content when closed."""
 
@@ -64,9 +74,20 @@ class SessionArtifactStore(ArtifactStore, Protocol):
 
 
 class LocalArtifactStore:
-    """Filesystem-backed store rooted at ``CLAUDE_PLUGIN_DATA/runs``."""
+    """Filesystem-backed store rooted at ``plugin_data_dir/runs``."""
 
-    def __init__(self, plugin_data_dir: Path | str | None = None) -> None:
+    def __init__(
+        self,
+        plugin_data_dir: Path | str | None = None,
+        *,
+        durable: bool = False,
+    ) -> None:
+        if not isinstance(durable, bool):
+            raise TypeError("durable must be a boolean")
+        if durable and plugin_data_dir is None:
+            raise ArtifactStoreConfigurationError(
+                "a durable local artifact store requires an explicit host-managed directory"
+            )
         if plugin_data_dir is None:
             plugin_data_dir = os.environ.get("CLAUDE_PLUGIN_DATA")
         if plugin_data_dir is None or not str(plugin_data_dir).strip():
@@ -76,6 +97,12 @@ class LocalArtifactStore:
             )
 
         self._runs_dir = Path(plugin_data_dir).expanduser() / "runs"
+        self._is_durable = durable
+
+    @property
+    def is_durable(self) -> bool:
+        """Return the host's explicit cross-execution persistence declaration."""
+        return self._is_durable
 
     def put(self, run_id: str, reference: str, artifact: bytes) -> bool:
         """Create an artifact once; repeated writes preserve the original bytes."""
@@ -216,8 +243,9 @@ def resolve_artifact_store(
     *,
     host_reference: ArtifactStore | None = None,
     plugin_data_dir: Path | str | None = None,
+    durable: bool = False,
 ) -> ArtifactStore:
-    """Resolve the configured store, preferring an explicitly supplied host store."""
+    """Resolve the store and propagate an explicit host durability declaration."""
     if host_reference is not None:
         if not isinstance(host_reference, ArtifactStore):
             raise TypeError("host_reference must implement put, get, and exists")
@@ -235,4 +263,4 @@ def resolve_artifact_store(
             "explicitly."
         )
 
-    return LocalArtifactStore(plugin_data_dir=plugin_data_dir)
+    return LocalArtifactStore(plugin_data_dir=plugin_data_dir, durable=durable)

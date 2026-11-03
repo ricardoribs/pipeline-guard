@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["anthropic>=0.40.0", "jsonschema>=4.0.0", "pyyaml>=6.0.3"]
+# dependencies = ["anthropic>=0.40.0", "httpx>=0.27.0", "jsonschema>=4.0.0", "pyyaml>=6.0.3"]
 # ///
 """Headless V1 diagnosis, eligibility and reports with terminal run observability.
 
@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import sys
 import traceback
 from collections.abc import Callable, Mapping, Sequence
@@ -40,6 +39,12 @@ from scripts.incident_validator import (
     IncidentValidationError,
     validate_incident_input,
 )
+from scripts.model_backend import (
+    ModelBackendConfigurationError,
+    ModelSettings,
+    openai_chat_completion,
+    resolve_model_settings,
+)
 from scripts.redaction import redact_payload
 from scripts.report_renderer import render_report
 from scripts.run_manifest import (
@@ -52,6 +57,10 @@ from scripts.validate_config import ConfigValidationError, validate_config
 # isort: on
 
 AGENT_PATH = Path(__file__).resolve().parents[1] / "agents" / "diagnosis-agent.md"
+DIAGNOSIS_SCHEMA_PATH = (
+    PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+)
+_DIAGNOSIS_TOOL_NAME = "submit_diagnosis"
 _LOCAL_TOKEN_BOUND_OVERHEAD = 512
 
 
@@ -67,16 +76,26 @@ def load_agent_prompt(document: str | None = None) -> str:
 
 
 class DiagnosisRunner:
-    """Use the configured Anthropic-compatible endpoint with bounded requests.
+    """Use Anthropic or OpenAI-compatible model APIs with bounded requests."""
 
-    ANTHROPIC_MODEL selects the deployed diagnostic model. Authentication and
-    ANTHROPIC_BASE_URL are resolved by the SDK; no credential file is loaded.
-    Native token counting is preferred. Unity Gateway model services that do not
-    expose that route use a conservative local upper bound instead.
-    """
-
-    def __init__(self, model: str | None = None, *, client: Any = None) -> None:
-        self.model = model or os.environ.get("ANTHROPIC_MODEL", "")
+    def __init__(
+        self,
+        model: str | None = None,
+        *,
+        provider: str | None = None,
+        project_config: Mapping[str, Any] | None = None,
+        environment: Mapping[str, str] | None = None,
+        settings: ModelSettings | None = None,
+        client: Any = None,
+    ) -> None:
+        self.settings: ModelSettings = settings or resolve_model_settings(
+            project_config,
+            provider=provider,
+            model=model,
+            environment=environment,
+        )
+        self.model = self.settings.model
+        self.provider = self.settings.profile
         self._client = client
 
     def __call__(
@@ -85,9 +104,17 @@ class DiagnosisRunner:
         budget: ExecutionBudget,
         agent_prompt: str,
     ) -> object:
-        if not self.model:
-            raise ValueError("ANTHROPIC_MODEL must select the diagnostic model")
-        client = self._client or anthropic.Anthropic(max_retries=0)
+        if self.settings.provider == "openai-compatible":
+            return self._call_openai_compatible(payload, budget, agent_prompt)
+        return self._call_anthropic(payload, budget, agent_prompt)
+
+    def _call_anthropic(
+        self,
+        payload: Mapping[str, Any],
+        budget: ExecutionBudget,
+        agent_prompt: str,
+    ) -> object:
+        client = self._client or _anthropic_client(self.settings)
         messages: list[MessageParam] = [
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
         ]
@@ -107,7 +134,9 @@ class DiagnosisRunner:
                     raise
                 input_tokens = _conservative_input_token_bound(agent_prompt, messages)
             budget.record_tokens(input_tokens)
-            output_limit = budget.remaining_tokens - 1
+            output_limit = self.settings.bounded_output_tokens(
+                budget.remaining_tokens - 1
+            )
             if output_limit < 1:
                 raise ExecutionBudgetExceeded("max_tokens")
             response = budget.call_tool(
@@ -140,6 +169,112 @@ class DiagnosisRunner:
         except json.JSONDecodeError:
             return None
 
+    def _call_openai_compatible(
+        self,
+        payload: Mapping[str, Any],
+        budget: ExecutionBudget,
+        agent_prompt: str,
+    ) -> object:
+        user_message = json.dumps(payload, ensure_ascii=False)
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": agent_prompt},
+            {"role": "user", "content": user_message},
+        ]
+        input_bound = _conservative_input_token_bound(
+            agent_prompt,
+            [{"role": "user", "content": user_message}],
+        )
+        budget.record_tokens(input_bound)
+        output_limit = self.settings.bounded_output_tokens(budget.remaining_tokens - 1)
+        if output_limit < 1:
+            raise ExecutionBudgetExceeded("max_tokens")
+        response = budget.call_tool(
+            lambda: openai_chat_completion(
+                self.settings,
+                {
+                    "model": self.model,
+                    "messages": messages,
+                    "tools": [_diagnosis_tool()],
+                    "tool_choice": {
+                        "type": "function",
+                        "function": {"name": _DIAGNOSIS_TOOL_NAME},
+                    },
+                    "max_tokens": output_limit,
+                    "stream": False,
+                },
+                timeout=budget.remaining_seconds,
+                client=self._client,
+            )
+        )
+        choice = _openai_choice(response)
+        usage = response.get("usage")
+        output_tokens = _openai_output_tokens(usage, choice.get("message"))
+        budget.record_tokens(output_tokens)
+        return _openai_diagnosis_document(choice)
+
+
+def _diagnosis_tool() -> dict[str, object]:
+    schema = json.loads(DIAGNOSIS_SCHEMA_PATH.read_text(encoding="utf-8"))
+    parameters = {
+        key: schema[key]
+        for key in ("type", "additionalProperties", "required", "properties")
+    }
+    return {
+        "type": "function",
+        "function": {
+            "name": _DIAGNOSIS_TOOL_NAME,
+            "description": "Submit exactly one pipeline_diagnosis_v1 object.",
+            "parameters": parameters,
+        },
+    }
+
+
+def _openai_diagnosis_document(choice: Mapping[str, Any]) -> object:
+    if choice.get("finish_reason") not in {"tool_calls", "stop"}:
+        return None
+    message = choice.get("message")
+    if not isinstance(message, Mapping):
+        return None
+    tool_calls = message.get("tool_calls")
+    if not isinstance(tool_calls, list) or len(tool_calls) != 1:
+        return None
+    tool_call = tool_calls[0]
+    if not isinstance(tool_call, Mapping):
+        return None
+    function = tool_call.get("function")
+    if (
+        not isinstance(function, Mapping)
+        or function.get("name") != _DIAGNOSIS_TOOL_NAME
+    ):
+        return None
+    arguments = function.get("arguments")
+    if isinstance(arguments, Mapping):
+        return dict(arguments)
+    if not isinstance(arguments, str):
+        return None
+    try:
+        document = json.loads(arguments)
+    except json.JSONDecodeError:
+        return None
+    return document if isinstance(document, Mapping) else None
+
+
+def _openai_choice(response: Mapping[str, Any]) -> Mapping[str, Any]:
+    choices = response.get("choices")
+    if not isinstance(choices, list) or len(choices) != 1:
+        return {}
+    choice = choices[0]
+    return choice if isinstance(choice, Mapping) else {}
+
+
+def _openai_output_tokens(usage: object, message: object) -> int:
+    if isinstance(usage, Mapping):
+        value = usage.get("completion_tokens")
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    serialized = json.dumps(message, ensure_ascii=False, separators=(",", ":"))
+    return len(serialized.encode("utf-8")) + _LOCAL_TOKEN_BOUND_OVERHEAD
+
 
 def _is_unavailable_unity_gateway_token_count(error: anthropic.BadRequestError) -> bool:
     """Recognize Unity Gateway's explicit unsupported managed-path response."""
@@ -152,9 +287,21 @@ def _is_unavailable_unity_gateway_token_count(error: anthropic.BadRequestError) 
     )
 
 
+def _anthropic_client(settings: ModelSettings) -> anthropic.Anthropic:
+    arguments: dict[str, Any] = {"max_retries": 0}
+    if settings.base_url is not None:
+        arguments["base_url"] = settings.base_url
+    if settings.api_key is not None:
+        credential_argument = (
+            "api_key" if settings.credential_kind == "api-key" else "auth_token"
+        )
+        arguments[credential_argument] = settings.api_key
+    return anthropic.Anthropic(**arguments)
+
+
 def _conservative_input_token_bound(
     agent_prompt: str,
-    messages: Sequence[MessageParam],
+    messages: Sequence[Mapping[str, object]],
 ) -> int:
     """Bound visible UTF-8 input plus a fixed allowance for protocol tokens."""
     serialized = json.dumps(
@@ -297,7 +444,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--config", type=Path, help="materialized project configuration"
     )
     parser.add_argument("--project-root", type=Path, default=Path.cwd())
-    parser.add_argument("--model", help="diagnostic model; defaults to ANTHROPIC_MODEL")
+    parser.add_argument(
+        "--model-provider",
+        choices=(
+            "anthropic",
+            "databricks",
+            "openai",
+            "gemini",
+            "ollama",
+            "openai-compatible",
+        ),
+        help="model API profile; defaults to runtime.model or anthropic",
+    )
+    parser.add_argument(
+        "--model",
+        help="diagnostic model; defaults to runtime.model or provider environment",
+    )
     args = parser.parse_args(argv)
     started_at = datetime.now(UTC)
 
@@ -342,10 +504,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    runner = DiagnosisRunner(args.model)
-    if not runner.model:
+    try:
+        runner = DiagnosisRunner(
+            args.model,
+            provider=args.model_provider,
+            project_config=config,
+        )
+    except ModelBackendConfigurationError as error:
         print(
-            "Invalid project configuration: set ANTHROPIC_MODEL or --model",
+            f"Invalid project configuration: {error}",
             file=sys.stderr,
         )
         return 2
@@ -365,6 +532,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "incident": incident,
             "config": config,
             "project_root": str(args.project_root.resolve()),
+            "model_provider": runner.provider,
             "model": runner.model,
             "agent_hash": hashlib.sha256(AGENT_PATH.read_bytes()).hexdigest(),
         }

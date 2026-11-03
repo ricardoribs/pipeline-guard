@@ -8,7 +8,7 @@ Roteiro mínimo para quem implementa ou revisa esta feature: simular, num contai
 
 Use um container Linux descartável, com um usuário sem privilégios, sem sessão nem credencial pessoal (FR-012):
 
-- Claude Code 2.1.295 ou superior, `uv` e `git` no `PATH`;
+- `uv` e `git` no `PATH`; Claude Code 2.1.295 ou superior somente quando o backend selecionado for `anthropic`;
 - o marketplace clonado numa ref fixa, com `.`;
 - credenciais de escrita do provedor suportado pelo publicador privado do Pipeline Guard (Bitbucket ou GitHub);
 - um repositório de sandbox com um projeto dbt e a branch `dev`;

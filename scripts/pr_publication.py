@@ -19,7 +19,12 @@ from urllib.parse import urlsplit
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.draft_pr_publisher import publish_request as publish_draft_pr_request
+from scripts.draft_pr_publisher import (
+    find_request as find_repair_pr_request,
+)
+from scripts.draft_pr_publisher import (
+    publish_request as publish_draft_pr_request,
+)
 from scripts.git_executor import (
     isolated_push_environment,
     resolve_push_credential,
@@ -56,9 +61,15 @@ class DraftPRPublisher(Protocol):
 
 
 class _DraftPRRequestPublisher(Protocol):
-    """Callable contract for the draft PR provider script."""
+    """Callable contract for the repair-specific provider script."""
 
     def __call__(self, value: object, /) -> dict[str, object]: ...
+
+
+class _RepairPRRequestFinder(Protocol):
+    """Read-only callable contract for repair-specific draft lookup."""
+
+    def __call__(self, value: object, /) -> dict[str, object] | None: ...
 
 
 class PipelineGuardDraftPRPublisher:
@@ -71,6 +82,7 @@ class PipelineGuardDraftPRPublisher:
         repository: object,
         repository_owner: object,
         request_publisher: _DraftPRRequestPublisher = publish_draft_pr_request,
+        request_finder: _RepairPRRequestFinder = find_repair_pr_request,
     ) -> None:
         self._provider = _required_text(provider, "repository.provider").lower()
         if self._provider not in {"bitbucket", "github"}:
@@ -80,6 +92,7 @@ class PipelineGuardDraftPRPublisher:
         self._repository = _required_text(repository, "repository")
         self._repository_owner = _required_text(repository_owner, "repository_owner")
         self._request_publisher = request_publisher
+        self._request_finder = request_finder
 
     def publish_or_reuse_draft(
         self,
@@ -87,9 +100,40 @@ class PipelineGuardDraftPRPublisher:
         *,
         incident_id: str,
         run_id: str,
-    ) -> dict[str, str]:
+    ) -> dict[str, object]:
         """Publish one neutral repair request and expose only the PR reference."""
-        payload = {
+        payload = self._payload(request, incident_id=incident_id, run_id=run_id)
+        try:
+            response = self._request_publisher(payload)
+        except (OSError, ValueError) as error:
+            raise PRPublicationError(
+                "Pipeline Guard draft-PR publication failed"
+            ) from error
+        return _normalized_repair_reference(response)
+
+    def find_existing_draft(
+        self,
+        request: PRRequest,
+        *,
+        incident_id: str,
+        run_id: str,
+    ) -> dict[str, object] | None:
+        """Look up the complete unattended PR identity without creating a PR."""
+        payload = self._payload(request, incident_id=incident_id, run_id=run_id)
+        try:
+            response = self._request_finder(payload)
+        except (OSError, ValueError) as error:
+            raise PRPublicationError("Pipeline Guard draft-PR lookup failed") from error
+        return None if response is None else _normalized_repair_reference(response)
+
+    def _payload(
+        self,
+        request: PRRequest,
+        *,
+        incident_id: str,
+        run_id: str,
+    ) -> dict[str, object]:
+        payload: dict[str, object] = {
             "provider": self._provider,
             "repository": self._repository,
             "repository_owner": self._repository_owner,
@@ -101,21 +145,18 @@ class PipelineGuardDraftPRPublisher:
             "incident_id": incident_id,
             "run_id": run_id,
         }
-        try:
-            response = self._request_publisher(payload)
-        except (OSError, ValueError) as error:
-            raise PRPublicationError(
-                "Pipeline Guard draft-PR publication failed"
-            ) from error
-        return _normalized_repair_reference(response)
+        if request.failure_signature is not None:
+            payload["failure_signature"] = request.failure_signature
+        return payload
 
 
 def pipeline_guard_publisher_from_repository(
     repository_config: object,
     *,
     request_publisher: _DraftPRRequestPublisher = publish_draft_pr_request,
+    request_finder: _RepairPRRequestFinder = find_repair_pr_request,
 ) -> PipelineGuardDraftPRPublisher:
-    """Select the draft PR publisher from validated repository config."""
+    """Select the repair-specific publisher from validated repository config."""
     if not isinstance(repository_config, Mapping):
         raise PRPublicationError("repository configuration must be an object")
     provider = repository_config.get("provider")
@@ -127,6 +168,7 @@ def pipeline_guard_publisher_from_repository(
         repository=name,
         repository_owner=owner,
         request_publisher=request_publisher,
+        request_finder=request_finder,
     )
 
 
@@ -135,7 +177,7 @@ class DraftPRPublication:
     """A policy decision and, when allowed, the repair draft PR reference."""
 
     decision: PRPolicyDecision
-    draft_pr: dict[str, str] | None
+    draft_pr: dict[str, object] | None
     test_result: TestExecutorResult | None = None
 
 
@@ -476,12 +518,16 @@ def _validated_pushed_branch(
 
 
 def _request_from_mapping(value: object) -> PRRequest:
-    if not isinstance(value, Mapping) or set(value) != {
+    required = {
         "title",
         "body",
         "branch",
         "base",
         "draft",
+    }
+    if not isinstance(value, Mapping) or frozenset(value) not in {
+        frozenset(required),
+        frozenset({*required, "failure_signature"}),
     }:
         raise PRPublicationError("request has unsupported or missing fields")
     if value["draft"] is not True:
@@ -492,6 +538,7 @@ def _request_from_mapping(value: object) -> PRRequest:
         branch=_required_text(value["branch"], "request.branch"),
         base=_required_text(value["base"], "request.base"),
         draft=True,
+        failure_signature=_optional_failure_signature(value.get("failure_signature")),
     )
 
 
@@ -501,18 +548,26 @@ def _required_text(value: object, field: str) -> str:
     return value
 
 
-def _normalized_draft_pr(value: object) -> dict[str, str]:
+def _normalized_draft_pr(value: object) -> dict[str, object]:
     if not isinstance(value, Mapping) or not value:
         raise PRPublicationError(
             "repair PR publisher must return a draft PR id and/or URL"
         )
-    if not set(value).issubset({"id", "url"}):
+    if not set(value).issubset({"id", "url", "reused"}):
         raise PRPublicationError("repair PR result contains unsupported fields")
 
-    return {key: _required_text(item, f"draft_pr.{key}") for key, item in value.items()}
+    result: dict[str, object] = {}
+    for key, item in value.items():
+        if key == "reused":
+            if not isinstance(item, bool):
+                raise PRPublicationError("draft_pr.reused must be a boolean")
+            result[key] = item
+        else:
+            result[key] = _required_text(item, f"draft_pr.{key}")
+    return result
 
 
-def _normalized_repair_reference(value: object) -> dict[str, str]:
+def _normalized_repair_reference(value: object) -> dict[str, object]:
     """Accept internal idempotency metadata while keeping the result neutral."""
     if not isinstance(value, Mapping) or set(value) != {"id", "url", "reused"}:
         raise PRPublicationError(
@@ -520,10 +575,26 @@ def _normalized_repair_reference(value: object) -> dict[str, str]:
         )
     if not isinstance(value["reused"], bool):
         raise PRPublicationError("repair PR publisher returned an invalid reuse flag")
-    return {
+    result: dict[str, object] = {
         "id": _required_text(value["id"], "draft_pr.id"),
         "url": _required_text(value["url"], "draft_pr.url"),
     }
+    if value["reused"] is True:
+        result["reused"] = True
+    return result
+
+
+def _optional_failure_signature(value: object) -> str | None:
+    if value is None:
+        return None
+    if (
+        not isinstance(value, str)
+        or not value.startswith("sha256:")
+        or len(value) != 71
+        or any(character not in "0123456789abcdef" for character in value[7:])
+    ):
+        raise PRPublicationError("request.failure_signature is invalid")
+    return value
 
 
 def _repository_identity_from_url(

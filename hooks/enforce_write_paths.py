@@ -275,6 +275,66 @@ def _deny(reason: str) -> dict[str, Any]:
     }
 
 
+def file_access_denial(
+    *,
+    workspace_root: Path,
+    tool_name: str,
+    file_path: object,
+    approved_read_paths: Sequence[str] | None = None,
+) -> str | None:
+    """Return the shared deterministic denial reason for one file operation."""
+
+    action = "read" if tool_name in _READ_TOOLS else "write"
+    try:
+        resolved_root = workspace_root.resolve(strict=True)
+        if not resolved_root.is_dir():
+            raise _PolicyError("isolated workspace is not a directory")
+        config_path = resolved_root / _CONFIG_RELATIVE_PATH
+        config_path.resolve(strict=False).relative_to(resolved_root)
+        relative_path, resolved_path = _relative_target(file_path, resolved_root)
+        editable_paths, editable_extensions, sensitive_paths = _load_safety(config_path)
+    except (OSError, RuntimeError, ValueError) as error:
+        return f"Remediation {action} blocked: policy could not be verified ({error})."
+
+    if tool_name in _READ_TOOLS:
+        try:
+            if approved_read_paths is None:
+                approved = _approved_read_paths(resolved_root)
+            else:
+                approved = frozenset(
+                    _relative_target(path, resolved_root)[0].casefold()
+                    for path in approved_read_paths
+                )
+        except (OSError, RuntimeError, ValueError) as error:
+            reason = "Remediation read blocked: caller-approved read scope could not be verified"
+            return f"{reason} ({error})."
+        read_sensitive_paths = (*sensitive_paths, *_READ_SENSITIVE_PATTERNS)
+        if _matches_any_sensitive_path(relative_path, read_sensitive_paths):
+            return (
+                "Remediation read blocked: target matches a protected sensitive path."
+            )
+        if relative_path.casefold() not in approved:
+            return (
+                "Remediation read blocked: target is outside the caller-approved "
+                "read scope."
+            )
+        return None
+
+    if relative_path.casefold() == _CONFIG_RELATIVE_PATH.as_posix().casefold():
+        return (
+            "Remediation write blocked: the project safety configuration is protected."
+        )
+    if _matches_any_sensitive_path(relative_path, sensitive_paths):
+        return "Remediation write blocked: target matches safety.sensitive_paths."
+    if not _matches_any(relative_path, editable_paths):
+        return "Remediation write blocked: target is outside safety.editable_paths."
+    if resolved_path.suffix.casefold() not in {
+        extension.casefold() for extension in editable_extensions
+    }:
+        return "Remediation write blocked: target extension is not editable."
+    return None
+
+
 def enforce_file_event(event: object) -> dict[str, Any] | None:
     """Return a deny decision for an unauthorized remediation file-tool call."""
     if not isinstance(event, Mapping):
@@ -298,57 +358,12 @@ def enforce_file_event(event: object) -> dict[str, Any] | None:
             f"Remediation {action} blocked: isolated workspace is unavailable."
         )
 
-    try:
-        workspace_root = Path(cwd).resolve(strict=True)
-        if not workspace_root.is_dir():
-            raise _PolicyError("isolated workspace is not a directory")
-        config_path = workspace_root / _CONFIG_RELATIVE_PATH
-        config_path.resolve(strict=False).relative_to(workspace_root)
-        relative_path, resolved_path = _relative_target(
-            tool_input.get("file_path"), workspace_root
-        )
-        editable_paths, editable_extensions, sensitive_paths = _load_safety(config_path)
-    except (OSError, RuntimeError, ValueError) as error:
-        action = "read" if tool_name in _READ_TOOLS else "write"
-        return _deny(
-            f"Remediation {action} blocked: policy could not be verified ({error})."
-        )
-
-    if tool_name in _READ_TOOLS:
-        try:
-            approved_read_paths = _approved_read_paths(workspace_root)
-        except _PolicyError as error:
-            reason = "Remediation read blocked: caller-approved read scope could not be verified"
-            return _deny(f"{reason} ({error}).")
-        read_sensitive_paths = (*sensitive_paths, *_READ_SENSITIVE_PATTERNS)
-        if _matches_any_sensitive_path(relative_path, read_sensitive_paths):
-            return _deny(
-                "Remediation read blocked: target matches a protected sensitive path."
-            )
-        if relative_path.casefold() not in approved_read_paths:
-            return _deny(
-                "Remediation read blocked: target is outside the caller-approved read scope."
-            )
-        return None
-
-    if relative_path.casefold() == _CONFIG_RELATIVE_PATH.as_posix().casefold():
-        return _deny(
-            "Remediation write blocked: the project safety configuration is protected."
-        )
-    if _matches_any_sensitive_path(relative_path, sensitive_paths):
-        return _deny(
-            "Remediation write blocked: target matches safety.sensitive_paths."
-        )
-    if not _matches_any(relative_path, editable_paths):
-        return _deny(
-            "Remediation write blocked: target is outside safety.editable_paths."
-        )
-    if resolved_path.suffix.casefold() not in {
-        extension.casefold() for extension in editable_extensions
-    }:
-        return _deny("Remediation write blocked: target extension is not editable.")
-
-    return None
+    denial = file_access_denial(
+        workspace_root=Path(cwd),
+        tool_name=tool_name,
+        file_path=tool_input.get("file_path"),
+    )
+    return _deny(denial) if denial is not None else None
 
 
 def main() -> int:

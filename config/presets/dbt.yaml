@@ -31,7 +31,7 @@ repository:
   url: ""
   # Default branch used as the base for draft PRs.
   default_branch: "main"
-  # Prefix for disposable branches created for approved remediation.
+  # Prefix for disposable branches created for authorized remediation.
   remediation_branch_prefix: "pipeline-guard"
 
 # Evidence providers enabled for this project.
@@ -47,6 +47,10 @@ evidence_providers: []
 # in DAG order, so only "deps" and "build" are needed here.  Per-stage
 # commands (parse, compile, test) are still supported by the adapter; add them
 # back if your project requires granular validation steps.
+# WARNING: "dbt build" can write to the configured warehouse. Ensure the active
+# dbt target is isolated and non-production, with least-privilege credentials.
+# Pipeline Guard allowlists declared commands but does not infer their side effects.
+# Never use a validation command to deploy to production or rerun the failed host pipeline.
 validation:
   commands:
     - name: "deps"
@@ -121,6 +125,15 @@ eligibility:
 runtime:
   # Artifact storage backend ("local" stores under $CLAUDE_PLUGIN_DATA/runs/).
   artifact_store: "local"
+  # Optional headless model backend. If omitted, the provider profile defaults to Anthropic;
+  # the model and credentials must still be provided through environment variables.
+  # Credentials must be references, never literal values.
+  # model:
+  #   provider: "ollama" # anthropic, databricks, openai, gemini, ollama, openai-compatible
+  #   name: "llama3.3"
+  #   max_output_tokens: 8192 # Provider-specific per-request output ceiling.
+  #   base_url: "http://127.0.0.1:11434/v1"
+  #   credential_ref: "env:PIPELINE_GUARD_MODEL_API_KEY"
   # Starter investigation limits; consumer projects may tighten them without changing the plugin.
   execution_budget:
     max_tool_calls: 20
