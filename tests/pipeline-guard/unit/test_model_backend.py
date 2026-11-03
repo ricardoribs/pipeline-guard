@@ -342,8 +342,20 @@ def test_diagnosis_runner_uses_openai_compatible_backend() -> None:
             {
                 "choices": [
                     {
-                        "finish_reason": "stop",
-                        "message": {"content": '{"cause_status":"UNKNOWN"}'},
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "diagnosis-1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "submit_diagnosis",
+                                        "arguments": '{"cause_status":"UNKNOWN"}',
+                                    },
+                                }
+                            ],
+                        },
                     }
                 ],
                 "usage": {"completion_tokens": 7},
@@ -377,6 +389,72 @@ def test_diagnosis_runner_uses_openai_compatible_backend() -> None:
     assert result == {"cause_status": "UNKNOWN"}
     assert client.requests[0]["json"]["model"] == "llama-test"
     assert client.requests[0]["json"]["max_tokens"] == 512
+    assert client.requests[0]["json"]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "submit_diagnosis"},
+    }
+    parameters = client.requests[0]["json"]["tools"][0]["function"]["parameters"]
+    assert parameters["additionalProperties"] is False
+    assert "evidence_citations" in parameters["required"]
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    ["{", "[]", None],
+)
+def test_diagnosis_runner_rejects_invalid_structured_arguments(
+    arguments: object,
+) -> None:
+    client = FakeClient(
+        FakeResponse(
+            {
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "tool_calls": [
+                                {
+                                    "id": "diagnosis-1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "submit_diagnosis",
+                                        "arguments": arguments,
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                ],
+                "usage": {"completion_tokens": 7},
+            }
+        )
+    )
+    settings = ModelSettings(
+        profile="ollama",
+        provider="openai-compatible",
+        model="llama-test",
+        base_url="http://127.0.0.1:11434/v1",
+        api_key=None,
+    )
+
+    assert (
+        DiagnosisRunner(settings=settings, client=client)(
+            {},
+            ExecutionBudget(
+                {
+                    "runtime": {
+                        "execution_budget": {
+                            "max_tool_calls": 2,
+                            "max_seconds": 60,
+                            "max_tokens": 10_000,
+                        }
+                    }
+                }
+            ),
+            "Return JSON.",
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize(

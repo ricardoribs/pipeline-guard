@@ -57,6 +57,10 @@ from scripts.validate_config import ConfigValidationError, validate_config
 # isort: on
 
 AGENT_PATH = Path(__file__).resolve().parents[1] / "agents" / "diagnosis-agent.md"
+DIAGNOSIS_SCHEMA_PATH = (
+    PLUGIN_ROOT / "contracts" / "schema" / "pipeline_diagnosis_v1.schema.json"
+)
+_DIAGNOSIS_TOOL_NAME = "submit_diagnosis"
 _LOCAL_TOKEN_BOUND_OVERHEAD = 512
 
 
@@ -190,6 +194,11 @@ class DiagnosisRunner:
                 {
                     "model": self.model,
                     "messages": messages,
+                    "tools": [_diagnosis_tool()],
+                    "tool_choice": {
+                        "type": "function",
+                        "function": {"name": _DIAGNOSIS_TOOL_NAME},
+                    },
                     "max_tokens": output_limit,
                     "stream": False,
                 },
@@ -201,17 +210,53 @@ class DiagnosisRunner:
         usage = response.get("usage")
         output_tokens = _openai_output_tokens(usage, choice.get("message"))
         budget.record_tokens(output_tokens)
-        if choice.get("finish_reason") != "stop":
-            return None
-        message = choice.get("message")
-        if not isinstance(message, Mapping) or not isinstance(
-            message.get("content"), str
-        ):
-            return None
-        try:
-            return json.loads(message["content"])
-        except json.JSONDecodeError:
-            return None
+        return _openai_diagnosis_document(choice)
+
+
+def _diagnosis_tool() -> dict[str, object]:
+    schema = json.loads(DIAGNOSIS_SCHEMA_PATH.read_text(encoding="utf-8"))
+    parameters = {
+        key: schema[key]
+        for key in ("type", "additionalProperties", "required", "properties")
+    }
+    return {
+        "type": "function",
+        "function": {
+            "name": _DIAGNOSIS_TOOL_NAME,
+            "description": "Submit exactly one pipeline_diagnosis_v1 object.",
+            "parameters": parameters,
+        },
+    }
+
+
+def _openai_diagnosis_document(choice: Mapping[str, Any]) -> object:
+    if choice.get("finish_reason") not in {"tool_calls", "stop"}:
+        return None
+    message = choice.get("message")
+    if not isinstance(message, Mapping):
+        return None
+    tool_calls = message.get("tool_calls")
+    if not isinstance(tool_calls, list) or len(tool_calls) != 1:
+        return None
+    tool_call = tool_calls[0]
+    if not isinstance(tool_call, Mapping):
+        return None
+    function = tool_call.get("function")
+    if (
+        not isinstance(function, Mapping)
+        or function.get("name") != _DIAGNOSIS_TOOL_NAME
+    ):
+        return None
+    arguments = function.get("arguments")
+    if isinstance(arguments, Mapping):
+        return dict(arguments)
+    if not isinstance(arguments, str):
+        return None
+    try:
+        document = json.loads(arguments)
+    except json.JSONDecodeError:
+        return None
+    return document if isinstance(document, Mapping) else None
 
 
 def _openai_choice(response: Mapping[str, Any]) -> Mapping[str, Any]:
