@@ -16,7 +16,11 @@ if str(PLUGIN_ROOT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_ROOT))
 
 import scripts.unattended_cli as unattended_cli  # noqa: E402
-from scripts.authoring_runner import AuthoringLimitReached, AuthoringResult  # noqa: E402
+from scripts.authoring_runner import (  # noqa: E402
+    AuthoringLimitReached,
+    AuthoringResult,
+    AuthoringRunnerError,
+)
 from scripts.execution_budget import ExecutionBudgetExceeded  # noqa: E402
 from scripts.git_executor import GitExecutionResult  # noqa: E402
 from scripts.patch_validator import PatchValidationError  # noqa: E402
@@ -457,6 +461,26 @@ def test_patch_validation_error_preserves_sanitized_detail(
     assert result["reason_code"] == "CHANGE_LIMIT_EXCEEDED"
     assert result["limitations"][-1] == (
         "applied_patch must be non-empty bytes from the prepared workspace"
+    )
+    assert workspace.discarded is True
+
+
+def test_authoring_error_preserves_sanitized_detail(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, _, workspace, _ = _run(
+        tmp_path,
+        monkeypatch,
+        authoring_error=AuthoringRunnerError(
+            "model ended without a file mutation; credential push-token"
+        ),
+    )
+
+    assert result["outcome"] == "ERROR"
+    assert result["reason_code"] == "OPERATIONAL_FAILURE"
+    assert result["limitations"][-1] == (
+        "Authoring failed: model ended without a file mutation; credential [REDACTED]"
     )
     assert workspace.discarded is True
 
