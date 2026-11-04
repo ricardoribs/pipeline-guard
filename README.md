@@ -20,6 +20,14 @@ request through a deterministic, draft PR publishing boundary.
 > operations and must use an isolated, non-production target when they can modify
 > external systems.
 
+> **Validated automation status:** the Databricks Jobs sandbox has exercised the
+> complete unattended remediation path: failure collection, diagnosis, policy
+> authorization, bounded authoring, project validation, restricted branch push,
+> and automatic draft-PR publication. A person still reviewed and merged that
+> draft before a healthy pipeline rerun. Bitbucket Pipelines has validated the
+> report-only and recursion-guard boundaries, but not host-side remediation;
+> Airflow validation remains pending.
+
 ## Table of Contents
 
 - [Overview](#overview)
