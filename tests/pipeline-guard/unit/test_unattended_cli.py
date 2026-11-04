@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -328,6 +329,74 @@ def test_remediation_config_must_match_the_incident_commit(tmp_path: Path) -> No
         )
 
     assert captured.value.reason_code == "INVALID_INPUT"
+
+
+def test_approved_read_paths_include_cited_dbt_source_file(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    model = workspace / "models" / "orders.sql"
+    model.parent.mkdir(parents=True)
+    model.write_text("select 1\n", encoding="utf-8")
+
+    approved = unattended_cli._approved_read_paths(
+        workspace,
+        incident={"artifacts": []},
+        diagnosis={
+            "evidence_citations": [
+                {"evidence_id": "incident:dbt:orders", "claim": "syntax error"}
+            ]
+        },
+        evidences=[
+            {
+                "evidence_id": "incident:dbt:orders",
+                "origin": "dbt",
+                "content": json.dumps({"original_file_path": "models/orders.sql"}),
+            }
+        ],
+        safety={
+            "editable_paths": ["models/**/*.sql"],
+            "sensitive_paths": ["config/**"],
+        },
+    )
+
+    assert approved == ["models/orders.sql"]
+
+
+def test_approved_read_paths_reject_uncited_and_sensitive_evidence(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    for relative in ("models/uncited.sql", "config/private.sql"):
+        target = workspace / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("select 1\n", encoding="utf-8")
+
+    approved = unattended_cli._approved_read_paths(
+        workspace,
+        incident={"artifacts": []},
+        diagnosis={
+            "evidence_citations": [
+                {"evidence_id": "incident:dbt:sensitive", "claim": "failure"}
+            ]
+        },
+        evidences=[
+            {
+                "evidence_id": "incident:dbt:uncited",
+                "origin": "dbt",
+                "content": json.dumps({"original_file_path": "models/uncited.sql"}),
+            },
+            {
+                "evidence_id": "incident:dbt:sensitive",
+                "origin": "dbt",
+                "content": json.dumps({"original_file_path": "config/private.sql"}),
+            },
+        ],
+        safety={
+            "editable_paths": ["**/*.sql"],
+            "sensitive_paths": ["config/**"],
+        },
+    )
+
+    assert approved == []
 
 
 @pytest.mark.parametrize(

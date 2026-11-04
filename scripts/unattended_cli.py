@@ -62,6 +62,9 @@ from scripts.incident_validator import IncidentValidationError, validate_inciden
 from scripts.model_backend import ModelBackendError, ModelSettings  # noqa: E402
 from scripts.patch_validator import (  # noqa: E402
     PatchValidationError,
+    _matches_any,
+    _matches_any_sensitive_path,
+    _normalize_pattern,
     _parse_applied_patch,
     validate_patch,
 )
@@ -708,6 +711,8 @@ def _author_and_validate_workspace_patch(
             workspace.path,
             incident=incident,
             diagnosis=diagnosis,
+            evidences=diagnosis_result.get("evidences", []),
+            safety=config.get("safety", {}),
         )
         if not approved_paths:
             result.setdefault("limitations", []).append("no_exact_approved_read_paths")
@@ -1168,17 +1173,21 @@ def _approved_read_paths(
     *,
     incident: Mapping[str, Any],
     diagnosis: Mapping[str, Any],
+    evidences: object,
+    safety: object,
 ) -> list[str]:
     candidates: list[str] = []
     resources = diagnosis.get("affected_resources", [])
     if isinstance(resources, list):
         candidates.extend(item for item in resources if isinstance(item, str))
+    candidates.extend(_cited_dbt_resource_paths(diagnosis, evidences))
     artifacts = incident.get("artifacts", [])
     if isinstance(artifacts, list):
         for artifact in artifacts:
             if isinstance(artifact, Mapping) and isinstance(artifact.get("uri"), str):
                 candidates.append(artifact["uri"])
 
+    editable_paths, sensitive_paths = _read_path_policy(safety)
     approved: list[str] = []
     seen: set[str] = set()
     resolved_root = workspace_root.resolve()
@@ -1187,10 +1196,17 @@ def _approved_read_paths(
         if (
             path.is_absolute()
             or ".." in path.parts
+            or "\\" in candidate
             or any(char in candidate for char in "*?[")
         ):
             continue
         normalized = path.as_posix().removeprefix("./")
+        if (
+            not normalized
+            or not _matches_any(normalized, editable_paths)
+            or _matches_any_sensitive_path(normalized, sensitive_paths)
+        ):
+            continue
         target = (resolved_root / normalized).resolve(strict=False)
         try:
             target.relative_to(resolved_root)
@@ -1200,6 +1216,54 @@ def _approved_read_paths(
             seen.add(normalized.casefold())
             approved.append(normalized)
     return approved
+
+
+def _cited_dbt_resource_paths(
+    diagnosis: Mapping[str, Any],
+    evidences: object,
+) -> list[str]:
+    """Return exact dbt source paths bound to evidence cited by the diagnosis."""
+    citations = diagnosis.get("evidence_citations", [])
+    if not isinstance(citations, list) or not isinstance(evidences, list):
+        return []
+    cited_ids = {
+        citation["evidence_id"]
+        for citation in citations
+        if isinstance(citation, Mapping)
+        and isinstance(citation.get("evidence_id"), str)
+    }
+    candidates: list[str] = []
+    for evidence in evidences:
+        if (
+            not isinstance(evidence, Mapping)
+            or evidence.get("evidence_id") not in cited_ids
+            or evidence.get("origin") != "dbt"
+            or not isinstance(evidence.get("content"), str)
+        ):
+            continue
+        try:
+            payload = json.loads(evidence["content"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(payload, Mapping) and isinstance(
+            payload.get("original_file_path"), str
+        ):
+            candidates.append(payload["original_file_path"])
+    return candidates
+
+
+def _read_path_policy(safety: object) -> tuple[list[str], list[str]]:
+    """Normalize the configured read boundary and fail closed when it is absent."""
+    if not isinstance(safety, Mapping):
+        return [], []
+    editable = safety.get("editable_paths", [])
+    sensitive = safety.get("sensitive_paths", [])
+    if not isinstance(editable, list) or not isinstance(sensitive, list):
+        return [], []
+    return (
+        [_normalize_pattern(pattern, "editable_paths") for pattern in editable],
+        [_normalize_pattern(pattern, "sensitive_paths") for pattern in sensitive],
+    )
 
 
 def _authoring_prompt(
