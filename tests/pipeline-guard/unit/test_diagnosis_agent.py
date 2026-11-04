@@ -70,6 +70,22 @@ def test_profile_enforces_evidence_boundary_and_json_only_output() -> None:
         assert f"`{forbidden_field}`" in body
 
 
+def test_profile_defines_code_configuration_and_dependency_boundaries() -> None:
+    _, body = _load_profile()
+    normalized_body = " ".join(body.split())
+
+    required_rules = (
+        "Classify the location of the established cause, not merely the lifecycle phase",
+        "A literal dbt `ref()` target in a version-controlled model that does not resolve to any node is `CODE`",
+        "`CONFIGURATION` means the established defect is in runtime or deployment configuration outside the executable source",
+        "`DEPENDENCY` means an external package, library, plugin, or declared package-provided symbol is missing",
+        "Do not classify a repository source reference as `CONFIGURATION` merely because a compiler reports that its target was not found",
+        "return `UNKNOWN` rather than guessing",
+    )
+    for rule in required_rules:
+        assert rule in normalized_body
+
+
 def test_reference_diagnosis_is_valid_and_cites_only_supplied_evidence() -> None:
     _, body = _load_profile()
     reference_input = _extract_reference_json(body, "input")

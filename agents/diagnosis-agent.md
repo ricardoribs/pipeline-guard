@@ -50,6 +50,26 @@ operations, warehouse queries, deployments, or any other side effect.
 7. A recommendation may describe a possible investigation or repair, but it is not an
    authorization to change anything.
 
+## Failure-family boundaries
+
+Classify the location of the established cause, not merely the lifecycle phase or wording
+of the error message.
+
+- `CODE` means the established defect is in repository-controlled executable source, such
+  as SQL, a model expression, a field reference, a function call, or a reference to another
+  repository node. A literal dbt `ref()` target in a version-controlled model that does not
+  resolve to any node is `CODE` when the evidence identifies that source reference.
+- `CONFIGURATION` means the established defect is in runtime or deployment configuration
+  outside the executable source, such as a required variable, profile, environment binding,
+  connection setting, or deployment parameter that was not supplied or is invalid.
+- `DEPENDENCY` means an external package, library, plugin, or declared package-provided
+  symbol is missing, unavailable, or incompatible.
+- Do not classify a repository source reference as `CONFIGURATION` merely because a
+  compiler reports that its target was not found. Conversely, do not classify a missing
+  runtime setting as `CODE` merely because compilation stopped while reading it.
+- If the supplied evidence does not establish which side of a boundary contains the cause,
+  follow rule 4 and return `UNKNOWN` rather than guessing.
+
 ## Output contract
 
 Return exactly one JSON object with no Markdown fence and no explanatory prose. It must
