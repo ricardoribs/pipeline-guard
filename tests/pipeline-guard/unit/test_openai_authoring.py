@@ -179,7 +179,9 @@ def test_direct_authoring_respects_per_request_output_limit(tmp_path: Path) -> N
                 "choices": [
                     {
                         "finish_reason": "stop",
-                        "message": {"content": "No repair required."},
+                        "message": {
+                            "content": "status: BLOCKED\nreason: No repair required."
+                        },
                     }
                 ],
                 "usage": {"completion_tokens": 5},
@@ -199,6 +201,98 @@ def test_direct_authoring_respects_per_request_output_limit(tmp_path: Path) -> N
     )
 
     assert client.requests[0]["json"]["max_tokens"] == 1024
+
+
+def test_direct_authoring_retries_an_evasive_no_patch_completion(
+    tmp_path: Path,
+) -> None:
+    workspace = _workspace(tmp_path)
+    client = FakeClient(
+        [
+            _tool_response("read-1", "read_file", {"file_path": "models/orders.sql"}),
+            {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "Please specify the desired change."},
+                    }
+                ],
+                "usage": {"completion_tokens": 5},
+            },
+            _tool_response(
+                "edit-1",
+                "edit_file",
+                {
+                    "file_path": "models/orders.sql",
+                    "old_text": "old_value",
+                    "new_text": "new_value",
+                },
+            ),
+            {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "status: PATCH_PREPARED"},
+                    }
+                ],
+                "usage": {"completion_tokens": 5},
+            },
+        ]
+    )
+
+    result = run_openai_authoring(
+        workspace,
+        prompt="Repair the confirmed failure.",
+        agent_prompt="Use only the supplied tools.",
+        approved_read_paths=["models/orders.sql"],
+        settings=_settings(),
+        budget=FakeBudget(),
+        max_turns=4,
+        client=client,
+    )
+
+    assert (workspace / "models" / "orders.sql").read_text(encoding="utf-8") == (
+        "select new_value\n"
+    )
+    assert any(event["type"] == "completion_retry" for event in result.events)
+    retry_messages = client.requests[2]["json"]["messages"]
+    assert any(
+        "Do not ask the caller" in message.get("content", "")
+        for message in retry_messages
+    )
+
+
+def test_direct_authoring_rejects_evasive_no_patch_at_turn_limit(
+    tmp_path: Path,
+) -> None:
+    client = FakeClient(
+        [
+            {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "Please provide more context."},
+                    }
+                ],
+                "usage": {"completion_tokens": 5},
+            }
+        ]
+    )
+
+    with pytest.raises(
+        DirectAuthoringError,
+        match="without a file mutation or explicit BLOCKED status",
+    ):
+        run_openai_authoring(
+            _workspace(tmp_path),
+            prompt="Repair the confirmed failure.",
+            agent_prompt="Use only the supplied tools.",
+            approved_read_paths=["models/orders.sql"],
+            settings=_settings(),
+            budget=FakeBudget(),
+            max_turns=1,
+            client=client,
+        )
 
 
 def test_direct_authoring_fails_closed_outside_editable_paths(tmp_path: Path) -> None:

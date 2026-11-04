@@ -97,6 +97,13 @@ are separate controls. Do not run or bypass them.
 4. If the evidence supports more than one reasonable correction, or the impact
    cannot be determined safely, stop with `BLOCKED` and request human review.
 5. Do not claim that the correction works. Validation is performed separately.
+6. Treat each invocation as the caller's explicit request to prepare the approved
+   correction. Do not ask the caller to restate the desired change. After reading
+   the approved target, perform the edit when the diagnosis, cited evidence, and
+   target content establish exactly one minimal safe correction.
+7. A completion without a `Write` or `Edit` operation must contain
+   `status: BLOCKED` and identify the specific missing or ambiguous fact. A target
+   summary or a request for unspecified additional context is not a completion.
 
 ## Completion report
 
