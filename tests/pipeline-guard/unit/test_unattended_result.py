@@ -86,3 +86,34 @@ def test_result_json_matches_the_returned_document(tmp_path: Path) -> None:
 
     persisted = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
     assert persisted == returned
+
+
+def test_early_error_preserves_actionable_sanitized_detail(tmp_path: Path) -> None:
+    secret = "arbitrary-test-secret-value"
+    result = {
+        "schema_version": "1.0",
+        "mode": "unattended",
+        "outcome": "ERROR",
+        "exit_code": 2,
+        "reason_code": "PREREQUISITE_MISSING",
+        "started_at": "2026-11-02T12:00:00Z",
+        "finished_at": "2026-11-02T12:00:01Z",
+        "decisions": [],
+        "summary": (
+            "Unattended prerequisite missing: --authorization-state-dir: "
+            f"filesystem rejected token={secret}"
+        ),
+    }
+
+    returned = write_unattended_result(
+        result,
+        output_dir=tmp_path,
+        secret_values=[secret],
+        stdout=io.StringIO(),
+    )
+
+    summary = returned["summary"]
+    assert "## Error details" in summary
+    assert "--authorization-state-dir" in summary
+    assert secret not in summary
+    assert "token=[REDACTED_SECRET]" in summary
