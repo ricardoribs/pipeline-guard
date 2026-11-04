@@ -168,6 +168,64 @@ def test_prepare_workspace_creates_an_incident_branch_from_the_configured_prefix
         )
 
 
+def test_prepare_workspace_uses_private_environment_only_for_remote_git(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _, approved_commit, config_path = _repository_with_config(tmp_path)
+    original_run = workspace_executor._run_git_command
+    remote_environment = os.environ.copy()
+    remote_environment["PIPELINE_GUARD_TEST_REMOTE_AUTH"] = "private-environment"
+    observed: list[str | None] = []
+
+    def capture_remote_environment(
+        command: list[str],
+        *,
+        environment: dict[str, str],
+        timeout: float,
+        capture_stdout: bool = False,
+    ) -> subprocess.CompletedProcess[str]:
+        if "clone" in command or "fetch" in command:
+            observed.append(environment.get("PIPELINE_GUARD_TEST_REMOTE_AUTH"))
+        return original_run(
+            command,
+            environment=environment,
+            timeout=timeout,
+            capture_stdout=capture_stdout,
+        )
+
+    monkeypatch.setattr(
+        workspace_executor,
+        "_run_git_command",
+        capture_remote_environment,
+    )
+
+    with prepare_workspace(
+        config_path,
+        base_commit=approved_commit,
+        incident_id="INC-PRIVATE-REMOTE-001",
+        parent_dir=tmp_path,
+        remote_environment=remote_environment,
+    ) as workspace:
+        stored_header = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(workspace.path),
+                "config",
+                "--local",
+                "--get-all",
+                "http.extraHeader",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert stored_header.returncode == 1
+
+    assert observed == ["private-environment", "private-environment"]
+
+
 def test_prepare_workspace_uses_the_incident_source_branch(tmp_path: Path) -> None:
     repository, _, config_path = _repository_with_config(tmp_path)
     _git(repository, "switch", "-c", "feature/orders")
