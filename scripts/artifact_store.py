@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import re
@@ -127,6 +128,10 @@ class LocalArtifactStore:
                 os.link(temporary_path, target)
             except FileExistsError:
                 return False
+            except OSError as error:
+                if not _link_is_unsupported(error):
+                    raise
+                return _exclusive_create(target, artifact)
             return True
         finally:
             if temporary_path is not None:
@@ -173,6 +178,39 @@ class LocalArtifactStore:
         # References are opaque identifiers, not paths supplied by a consumer.
         reference_hash = hashlib.sha256(reference.encode("utf-8")).hexdigest()
         return self._runs_dir / run_id / reference_hash
+
+
+def _link_is_unsupported(error: OSError) -> bool:
+    unsupported = {
+        errno.EXDEV,
+        errno.EPERM,
+        getattr(errno, "ENOTSUP", -1),
+        getattr(errno, "EOPNOTSUPP", -1),
+    }
+    return error.errno in unsupported
+
+
+def _exclusive_create(target: Path, artifact: bytes) -> bool:
+    """Create a complete artifact once when the filesystem cannot hard-link."""
+    try:
+        descriptor = os.open(
+            target,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+    except FileExistsError:
+        return False
+
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(artifact)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except BaseException:
+        with suppress(OSError):
+            target.unlink()
+        raise
+    return True
 
 
 class LocalArtifactSession:
