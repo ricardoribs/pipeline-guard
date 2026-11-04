@@ -609,7 +609,10 @@ def run_unattended(
             artifacts=artifacts,
             secrets=secrets,
         )
-    except PatchValidationError:
+    except PatchValidationError as error:
+        detail = redact_text(str(error))
+        if detail:
+            result.setdefault("limitations", []).append(detail)
         return _finish(
             result,
             outcome="BLOCKED",
@@ -724,6 +727,7 @@ def _author_and_validate_workspace_patch(
                 diagnosis=diagnosis,
                 evidences=diagnosis_result.get("evidences", []),
                 authorization=authorization,
+                approved_read_paths=approved_paths,
                 safety=config.get("safety", {}),
                 secret_values=secrets,
             ),
@@ -1272,6 +1276,7 @@ def _authoring_prompt(
     diagnosis: Mapping[str, Any],
     evidences: object,
     authorization: Mapping[str, Any],
+    approved_read_paths: Sequence[str],
     safety: object,
     secret_values: Sequence[str],
 ) -> str:
@@ -1294,6 +1299,7 @@ def _authoring_prompt(
         "diagnosis": diagnosis,
         "evidences": evidences,
         "authorization": safe_authorization,
+        "approved_read_paths": list(approved_read_paths),
         "safety": safety,
     }
     serialized = json.dumps(redact_payload(payload), ensure_ascii=False, sort_keys=True)
