@@ -39,6 +39,7 @@ from scripts.artifact_store import LocalArtifactStore  # noqa: E402
 from scripts.authoring_runner import (  # noqa: E402
     AuthoringLimitReached,
     AuthoringResult,
+    AuthoringRunnerError,
     run_authoring,
 )
 from scripts.diagnose_cli import DiagnosisRunner, run_diagnosis  # noqa: E402
@@ -676,6 +677,10 @@ def run_unattended(
         if isinstance(error, (UnattendedExecutionError, ModelBackendError)):
             reason_code = error.reason_code
             result.setdefault("limitations", []).append(redact_text(str(error)))
+        elif isinstance(error, AuthoringRunnerError):
+            reason_code = "OPERATIONAL_FAILURE"
+            detail = redact_text(str(error)).strip() or type(error).__name__
+            result.setdefault("limitations", []).append(f"Authoring failed: {detail}")
         else:
             reason_code = "OPERATIONAL_FAILURE"
             result.setdefault("limitations", []).append(
