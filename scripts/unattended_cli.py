@@ -491,12 +491,26 @@ def run_unattended(
             environment=active_environment,
         )
 
-        test_result = active_services.execute_tests(
-            config=config,
-            run_id=run_id,
-            workspace=workspace,
+        patch_files, patch_validation, test_result = (
+            _validate_patch_with_single_revision(
+                workspace,
+                services=active_services,
+                incident=signed_incident,
+                diagnosis=diagnosis,
+                diagnosis_result=diagnosis_result,
+                authorization=validated_authorization,
+                config=config,
+                result=result,
+                artifacts=artifacts,
+                secrets=secrets,
+                budget=budget,
+                runtime=runtime,
+                environment=active_environment,
+                run_id=run_id,
+                patch_files=patch_files,
+                patch_validation=patch_validation,
+            )
         )
-        artifacts["test-result.json"] = _serialized_test_result(test_result)
         publication_policy = decide_pr_publication_from_config(
             test_result.validation_status,
             config,
@@ -700,6 +714,7 @@ def _author_and_validate_workspace_patch(
     budget: UnattendedBudget,
     runtime: UnattendedPreflightResult,
     environment: Mapping[str, str],
+    validation_feedback: Mapping[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Author a new repair when needed, then validate the resulting workspace patch."""
     resuming_committed_patch = services.has_committed_patch(workspace)
@@ -730,6 +745,7 @@ def _author_and_validate_workspace_patch(
                 approved_read_paths=approved_paths,
                 safety=config.get("safety", {}),
                 secret_values=secrets,
+                validation_feedback=validation_feedback,
             ),
             approved_read_paths=approved_paths,
             budget=budget,
@@ -751,6 +767,68 @@ def _author_and_validate_workspace_patch(
         )
         raise PatchValidationError("workspace patch validation failed")
     return patch_files, patch_validation
+
+
+def _validate_patch_with_single_revision(
+    workspace: WorkspaceView,
+    *,
+    services: RepairServices,
+    incident: Mapping[str, Any],
+    diagnosis: Mapping[str, Any],
+    diagnosis_result: Mapping[str, Any],
+    authorization: Mapping[str, Any],
+    config: Mapping[str, Any],
+    result: dict[str, Any],
+    artifacts: dict[str, object],
+    secrets: Sequence[str],
+    budget: UnattendedBudget,
+    runtime: UnattendedPreflightResult,
+    environment: Mapping[str, str],
+    run_id: str,
+    patch_files: list[dict[str, Any]],
+    patch_validation: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any], TestExecutorResult]:
+    """Validate once, then permit one bounded local revision before publication."""
+    test_result = services.execute_tests(
+        config=config,
+        run_id=run_id,
+        workspace=workspace,
+    )
+    artifacts["test-result.json"] = _serialized_test_result(test_result)
+    policy = decide_pr_publication_from_config(test_result.validation_status, config)
+    if policy.status != "BLOCKED" or services.has_committed_patch(workspace):
+        return patch_files, patch_validation, test_result
+
+    _decision(
+        result,
+        "validation_retry",
+        "DOCUMENTED_DEFAULT",
+        "REAUTHOR_ONCE",
+    )
+    _preserve_first_authoring_attempt(artifacts)
+    patch_files, patch_validation = _author_and_validate_workspace_patch(
+        workspace,
+        services=services,
+        incident=incident,
+        diagnosis=diagnosis,
+        diagnosis_result=diagnosis_result,
+        authorization=authorization,
+        config=config,
+        result=result,
+        artifacts=artifacts,
+        secrets=secrets,
+        budget=budget,
+        runtime=runtime,
+        environment=environment,
+        validation_feedback=_validation_feedback(test_result),
+    )
+    test_result = services.execute_tests(
+        config=config,
+        run_id=run_id,
+        workspace=workspace,
+    )
+    artifacts["test-result.json"] = _serialized_test_result(test_result)
+    return patch_files, patch_validation, test_result
 
 
 def _resolve_remediation_identity(
@@ -1279,6 +1357,7 @@ def _authoring_prompt(
     approved_read_paths: Sequence[str],
     safety: object,
     secret_values: Sequence[str],
+    validation_feedback: Mapping[str, Any] | None = None,
 ) -> str:
     safe_authorization = {
         key: authorization[key]
@@ -1308,6 +1387,8 @@ def _authoring_prompt(
         "approved_read_paths": list(approved_read_paths),
         "safety": safety,
     }
+    if validation_feedback is not None:
+        payload["validation_feedback"] = validation_feedback
     serialized = json.dumps(redact_payload(payload), ensure_ascii=False, sort_keys=True)
     for secret in secret_values:
         if not secret:
@@ -1315,6 +1396,31 @@ def _authoring_prompt(
         for candidate in {secret, json.dumps(secret, ensure_ascii=False)[1:-1]}:
             serialized = serialized.replace(candidate, "[REDACTED]")
     return serialized
+
+
+def _validation_feedback(value: TestExecutorResult) -> dict[str, Any]:
+    """Build bounded, credential-free feedback for one local patch revision."""
+    return {
+        "instruction": (
+            "The current uncommitted patch failed declared validation. Re-read the "
+            "approved target and revise the existing patch once. Do not repeat an "
+            "unsupported assumption. For parser failures, inspect syntax immediately "
+            "before the reported token because the highlighted token may only be where "
+            "parsing stopped. Preserve literal and identifier semantics unless the "
+            "evidence specifically establishes a quoting error."
+        ),
+        "validation_status": value.validation_status,
+        "commands": [
+            {"name": item.name, "status": item.status} for item in value.results
+        ],
+    }
+
+
+def _preserve_first_authoring_attempt(artifacts: dict[str, object]) -> None:
+    """Retain first-attempt evidence before the single bounded revision overwrites it."""
+    for name in ("authoring-result.json", "patch-validation.json", "test-result.json"):
+        if name in artifacts:
+            artifacts[f"{name.removesuffix('.json')}-attempt-1.json"] = artifacts[name]
 
 
 def _diagnosis_summary(

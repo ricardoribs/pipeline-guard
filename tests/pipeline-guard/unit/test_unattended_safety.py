@@ -109,6 +109,31 @@ def test_secrets_are_absent_from_pr_summary_stdout_and_artifacts(
         in prompt_payload["instruction"]
     )
 
+    retry_prompt = _authoring_prompt(
+        _incident(secret),
+        diagnosis=_diagnosis(secret),
+        evidences=[],
+        authorization={
+            "incident_id": "incident-safe-1",
+            "diagnosis_hash": "sha256:diagnosis",
+            "actor": "sp:pipeline-guard",
+            "base_commit": "a" * 40,
+            "external_reference": "run-1",
+        },
+        approved_read_paths=["models/orders.sql"],
+        safety={"editable_paths": ["models/**"]},
+        secret_values=[secret],
+        validation_feedback={
+            "validation_status": "HAS_FAILURES",
+            "commands": [{"name": "build", "status": "FAILED"}],
+        },
+    )
+    retry_payload = json.loads(retry_prompt)
+    assert retry_payload["validation_feedback"] == {
+        "validation_status": "HAS_FAILURES",
+        "commands": [{"name": "build", "status": "FAILED"}],
+    }
+
     terminal = {
         "schema_version": "1.0",
         "mode": "unattended",
