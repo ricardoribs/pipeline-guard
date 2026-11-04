@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import importlib.util
 import sys
 from pathlib import Path
@@ -83,6 +84,22 @@ def test_durable_local_store_requires_explicit_host_directory(monkeypatch, tmp_p
 def test_local_store_reuses_existing_reference_without_overwriting(tmp_path):
     store = LocalArtifactStore(plugin_data_dir=tmp_path)
     reference = "stages/diagnose/result.json"
+
+    assert store.put("run-123", reference, b"first") is True
+    assert store.put("run-123", reference, b"second") is False
+    assert store.get("run-123", reference) == b"first"
+
+
+def test_local_store_falls_back_to_exclusive_create_without_hard_links(
+    monkeypatch, tmp_path
+):
+    store = LocalArtifactStore(plugin_data_dir=tmp_path)
+    reference = "authorization/consumed"
+
+    def unsupported_link(_source, _target):
+        raise OSError(errno.ENOTSUP, "hard links are unsupported")
+
+    monkeypatch.setattr(_artifact_store_module.os, "link", unsupported_link)
 
     assert store.put("run-123", reference, b"first") is True
     assert store.put("run-123", reference, b"second") is False
