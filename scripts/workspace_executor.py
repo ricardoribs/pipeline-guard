@@ -20,7 +20,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import suppress
 from ctypes import wintypes
 from dataclasses import dataclass
@@ -530,7 +530,11 @@ def _retained_workspace_directory(inputs: WorkspaceInput, parent_dir: Path) -> P
     return workspace_dir
 
 
-def _clone_repository(workspace: ClonedWorkspace) -> None:
+def _clone_repository(
+    workspace: ClonedWorkspace,
+    *,
+    remote_environment: Mapping[str, str] | None = None,
+) -> None:
     clone_url = workspace.inputs.repository_url
     if (
         "://" not in clone_url
@@ -553,7 +557,11 @@ def _clone_repository(workspace: ClonedWorkspace) -> None:
             clone_url,
             str(workspace.path),
         ],
-        environment=_git_environment(),
+        environment=(
+            dict(remote_environment)
+            if remote_environment is not None
+            else _git_environment()
+        ),
         timeout=_CLONE_TIMEOUT_SECONDS,
     )
     if completed.returncode != 0:
@@ -639,7 +647,11 @@ def _reference_commit(
     return completed.stdout.strip()
 
 
-def _fetch_base_branch(workspace: ClonedWorkspace) -> str:
+def _fetch_base_branch(
+    workspace: ClonedWorkspace,
+    *,
+    remote_environment: Mapping[str, str] | None = None,
+) -> str:
     base_branch = workspace.inputs.base_branch
     reference = f"refs/remotes/origin/{base_branch}"
     _workspace_git(
@@ -650,6 +662,7 @@ def _fetch_base_branch(workspace: ClonedWorkspace) -> str:
         f"+refs/heads/{base_branch}:{reference}",
         field="$.repository.default_branch",
         correction="restore access to the configured base branch and retry preparation",
+        environment=remote_environment,
     )
     commit = _reference_commit(
         workspace,
@@ -874,6 +887,7 @@ def prepare_workspace(
     parent_dir: Path | None = None,
     base_branch: object | None = None,
     allow_branch_rebind: bool = False,
+    remote_environment: Mapping[str, str] | None = None,
 ) -> ClonedWorkspace:
     """Verify an isolated clone and prepare its deterministic incident branch.
 
@@ -929,7 +943,10 @@ def prepare_workspace(
         raise
     if not reused:
         try:
-            _clone_repository(workspace)
+            _clone_repository(
+                workspace,
+                remote_environment=remote_environment,
+            )
         except (OSError, subprocess.TimeoutExpired):
             error = WorkspaceExecutionError(
                 "Git clone could not complete within its execution limit"
@@ -965,7 +982,10 @@ def prepare_workspace(
                 )
 
         workspace._previous_approved_base = _previous_approved_base(workspace)
-        branch_commit = _fetch_base_branch(workspace)
+        branch_commit = _fetch_base_branch(
+            workspace,
+            remote_environment=remote_environment,
+        )
         approved = workspace.inputs.base_commit.lower()
         if re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", approved) is None:
             raise WorkspaceValidationError(
@@ -1445,12 +1465,15 @@ def _workspace_git(
     *arguments: str,
     field: str,
     correction: str,
+    environment: Mapping[str, str] | None = None,
 ) -> str:
     try:
         completed = _run_git_command(
             # Command-local support for deep disposable paths on Git for Windows.
             ["git", "-C", str(workspace.path), "-c", "core.longpaths=true", *arguments],
-            environment=_git_environment(),
+            environment=(
+                dict(environment) if environment is not None else _git_environment()
+            ),
             timeout=_WORKSPACE_GIT_TIMEOUT_SECONDS,
             capture_stdout=True,
         )

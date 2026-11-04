@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -28,6 +29,7 @@ from scripts.test_executor import (
 )
 from scripts.unattended_cli import RepairServices, run_unattended  # noqa: E402
 from scripts.unattended_preflight import UnattendedPreflightResult  # noqa: E402
+from scripts.workspace_executor import WorkspaceExecutionError  # noqa: E402
 
 COMMIT = "a" * 40
 
@@ -200,6 +202,7 @@ def _services(
     authoring_error: BaseException | None = None,
     publication_error: BaseException | None = None,
     push_error: BaseException | None = None,
+    prepare_error: BaseException | None = None,
     existing_draft: dict[str, object] | None = None,
     committed_patch: bool = False,
     authorization_state_dir: Path | None = None,
@@ -225,6 +228,17 @@ def _services(
     ) -> FakeWorkspace:
         if authorization_state_dir is not None:
             assert any(path.is_file() for path in authorization_state_dir.rglob("*"))
+        remote_environment = _kwargs.get("remote_environment")
+        assert isinstance(remote_environment, dict)
+        assert remote_environment["GIT_CONFIG_GLOBAL"] == os.devnull
+        assert remote_environment["GIT_CONFIG_NOSYSTEM"] == "1"
+        assert remote_environment["GIT_CONFIG_KEY_0"] == "http.extraHeader"
+        assert str(remote_environment["GIT_CONFIG_VALUE_0"]).startswith(
+            "Authorization: Basic "
+        )
+        assert "push-token" not in repr(remote_environment)
+        if prepare_error is not None:
+            raise prepare_error
         workspace.incident_branch = f"pipeline-guard/{incident_id}"
         return workspace
 
@@ -330,6 +344,7 @@ def _run(
     authoring_error: BaseException | None = None,
     publication_error: BaseException | None = None,
     push_error: BaseException | None = None,
+    prepare_error: BaseException | None = None,
     existing_draft: dict[str, object] | None = None,
     committed_patch: bool = False,
 ) -> tuple[dict[str, Any], dict[str, int], FakeWorkspace, UnattendedPreflightResult]:
@@ -343,6 +358,7 @@ def _run(
         authoring_error=authoring_error,
         publication_error=publication_error,
         push_error=push_error,
+        prepare_error=prepare_error,
         existing_draft=existing_draft,
         committed_patch=committed_patch,
     )
@@ -388,6 +404,26 @@ def test_draft_pr_published_outcome(
         text=True,
     )
     assert source_status.stdout == ""
+
+
+def test_workspace_execution_error_preserves_sanitized_detail(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, _, workspace, _ = _run(
+        tmp_path,
+        monkeypatch,
+        prepare_error=WorkspaceExecutionError(
+            "Git clone failed; check repository access and the configured base branch"
+        ),
+    )
+
+    assert result["outcome"] == "ERROR"
+    assert result["reason_code"] == "OPERATIONAL_FAILURE"
+    assert result["limitations"][-1] == (
+        "Git clone failed; check repository access and the configured base branch"
+    )
+    assert workspace.discarded is False
 
 
 def test_existing_draft_is_reused_only_after_diagnosis_and_authorization(

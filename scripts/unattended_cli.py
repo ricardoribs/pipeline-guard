@@ -55,6 +55,7 @@ from scripts.git_executor import (  # noqa: E402
     GitExecutionResult,
     build_remediation_result,
     commit_and_push,
+    isolated_push_environment,
     resolve_push_credential,
 )
 from scripts.incident_validator import IncidentValidationError, validate_incident_input  # noqa: E402
@@ -91,6 +92,7 @@ from scripts.unattended_preflight import (  # noqa: E402
 from scripts.unattended_result import write_unattended_result  # noqa: E402
 from scripts.workspace_executor import (  # noqa: E402
     ClonedWorkspace,
+    WorkspaceExecutionError,
     prepare_workspace,
 )
 # isort: on
@@ -453,12 +455,17 @@ def run_unattended(
             )
 
         workspace_key = remediation_branch.removeprefix(branch_prefix + "/")
+        remote_environment = _workspace_remote_environment(
+            config,
+            environment=active_environment,
+        )
         workspace = active_services.prepare(
             config_path,
             base_commit=commit,
             base_branch=source_branch,
             incident_id=workspace_key,
             parent_dir=runtime.workspace_parent,
+            remote_environment=remote_environment,
         )
         if workspace.incident_branch != remediation_branch:
             raise UnattendedExecutionError(
@@ -629,6 +636,16 @@ def run_unattended(
             result,
             outcome="BLOCKED" if reason_code == "PR_TARGET_REFUSED" else "ERROR",
             reason_code=reason_code,
+            output_dir=runtime.output_dir,
+            artifacts=artifacts,
+            secrets=secrets,
+        )
+    except WorkspaceExecutionError as error:
+        result.setdefault("limitations", []).append(redact_text(str(error)))
+        return _finish(
+            result,
+            outcome="ERROR",
+            reason_code="OPERATIONAL_FAILURE",
             output_dir=runtime.output_dir,
             artifacts=artifacts,
             secrets=secrets,
@@ -947,6 +964,26 @@ def _push(
         cast(ClonedWorkspace, workspace),
         patch_validation,
         push_credential=credential,
+        provider=_required_text(repository.get("provider"), "repository.provider"),
+    )
+
+
+def _workspace_remote_environment(
+    config: Mapping[str, Any],
+    *,
+    environment: Mapping[str, str],
+) -> dict[str, str]:
+    """Build a private Git environment for clone and fetch operations."""
+    repository = _mapping(config.get("repository"), "repository")
+    credential = resolve_push_credential(
+        _required_text(
+            repository.get("push_credential_ref"),
+            "repository.push_credential_ref",
+        ),
+        host_environment=environment,
+    )
+    return isolated_push_environment(
+        credential,
         provider=_required_text(repository.get("provider"), "repository.provider"),
     )
 
