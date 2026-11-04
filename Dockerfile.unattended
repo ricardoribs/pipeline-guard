@@ -5,6 +5,7 @@ ARG DBT_CORE_VERSION=1.12.6
 ARG DBT_DUCKDB_VERSION=1.11.1
 
 ENV DEBIAN_FRONTEND=noninteractive \
+    HOME=/home/pipeline-guard \
     PIPELINE_GUARD_ROOT=/opt/pipeline-guard \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -13,12 +14,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PATH=/opt/pipeline-guard/.venv/bin:/usr/local/bin:/usr/bin:/bin
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates git passwd \
+    && apt-get install --yes --no-install-recommends ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
     && python -m pip install --no-cache-dir "uv==${UV_VERSION}"
 
-RUN groupadd --gid 10001 pipeline-guard \
-    && useradd \
+RUN /usr/sbin/groupadd --gid 10001 pipeline-guard \
+    && /usr/sbin/useradd \
         --uid 10001 \
         --gid 10001 \
         --create-home \
@@ -37,9 +38,7 @@ RUN uv sync --locked --no-dev --python /usr/local/bin/python \
     && mkdir --parents \
         /home/pipeline-guard/.cache \
         /home/pipeline-guard/work \
-    && chown --recursive 10001:10001 \
-        /home/pipeline-guard \
-        /opt/pipeline-guard
+    && chown --recursive 10001:10001 /home/pipeline-guard
 
 USER 10001:10001
 WORKDIR /home/pipeline-guard/work

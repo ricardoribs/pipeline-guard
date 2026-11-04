@@ -153,6 +153,8 @@ jobs:
       - name: Verify non-root runtime and required tools
         run: |
           test "$(docker run --rm pipeline-guard-unattended:test id -u)" = "10001"
+          test "$(docker run --rm pipeline-guard-unattended:test id -g)" = "10001"
+          docker run --rm pipeline-guard-unattended:test sh -c 'test ! -w "$PIPELINE_GUARD_ROOT"'
           docker run --rm pipeline-guard-unattended:test python --version
           docker run --rm pipeline-guard-unattended:test uv --version
           docker run --rm pipeline-guard-unattended:test git --version
