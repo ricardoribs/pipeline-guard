@@ -199,7 +199,7 @@ def _services(
     tmp_path: Path,
     *,
     diagnosis: dict[str, Any] | BaseException | None = None,
-    validation_status: str = "ALL_PASSED",
+    validation_status: str | list[str] = "ALL_PASSED",
     authoring_error: BaseException | None = None,
     publication_error: BaseException | None = None,
     push_error: BaseException | None = None,
@@ -217,6 +217,10 @@ def _services(
     workspace = FakeWorkspace(workspace_path, "")
     calls = {"diagnose": 0, "find_draft": 0, "push": 0, "publish": 0}
     repair_state = {"committed": committed_patch}
+    validation_statuses = (
+        [validation_status] if isinstance(validation_status, str) else validation_status
+    )
+    test_attempt = 0
 
     def diagnose(*_args: object, **_kwargs: object) -> dict[str, Any]:
         calls["diagnose"] += 1
@@ -286,11 +290,16 @@ def _services(
         )
 
     def tests(**_kwargs: object) -> ValidationExecutionResult:
-        command_status = "PASSED" if validation_status == "ALL_PASSED" else "FAILED"
+        nonlocal test_attempt
+        selected_status = validation_statuses[
+            min(test_attempt, len(validation_statuses) - 1)
+        ]
+        test_attempt += 1
+        command_status = "PASSED" if selected_status == "ALL_PASSED" else "FAILED"
         return ValidationExecutionResult(
             run_id="run-flow-1",
             results=[CommandResult("dbt-test", command_status, 1.0, None)],
-            validation_status=validation_status,
+            validation_status=selected_status,
         )
 
     def push(*_args: object, **_kwargs: object) -> GitExecutionResult:
@@ -344,7 +353,7 @@ def _run(
     config: dict[str, Any] | None = None,
     incident: dict[str, Any] | None = None,
     diagnosis: dict[str, Any] | BaseException | None = None,
-    validation_status: str = "ALL_PASSED",
+    validation_status: str | list[str] = "ALL_PASSED",
     authoring_error: BaseException | None = None,
     publication_error: BaseException | None = None,
     push_error: BaseException | None = None,
@@ -509,6 +518,23 @@ def test_blocked_validation_has_no_external_write(
     assert result["outcome"] == "BLOCKED"
     assert result["reason_code"] == "VALIDATION_FAILED"
     assert calls["push"] == calls["publish"] == 0
+
+
+def test_failed_validation_is_reauthored_once_before_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result, calls, _, preflight = _run(
+        tmp_path,
+        monkeypatch,
+        validation_status=["HAS_FAILURES", "ALL_PASSED"],
+    )
+
+    assert result["outcome"] == "DRAFT_PR_PUBLISHED"
+    assert calls["push"] == calls["publish"] == 1
+    artifacts = preflight.output_dir / "artifacts"
+    assert (artifacts / "authoring-result-attempt-1.json").is_file()
+    assert (artifacts / "patch-validation-attempt-1.json").is_file()
+    assert (artifacts / "test-result-attempt-1.json").is_file()
 
 
 def test_limit_reached_stops_before_push(
