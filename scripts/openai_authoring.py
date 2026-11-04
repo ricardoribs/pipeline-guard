@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -36,6 +37,20 @@ except ImportError:  # pragma: no cover - direct script execution
 
 _TOKEN_BOUND_OVERHEAD = 512
 _MAX_FILE_BYTES = 1_000_000
+_MUTATING_TOOLS = frozenset({"write_file", "edit_file"})
+_BLOCKED_STATUS = re.compile(
+    r'^\s*(?:[-*]\s*)?["`]?status["`]?\s*[:=]\s*["`]?BLOCKED["`]?(?:\s|,|$)',
+    re.IGNORECASE | re.MULTILINE,
+)
+_NO_PATCH_FOLLOW_UP = (
+    "No file mutation was prepared. Complete the already-authorized remediation "
+    "decision now. If the supplied diagnosis, cited evidence, approved target path "
+    "and target content establish exactly one minimal safe correction, invoke "
+    "edit_file or write_file. Do not ask the caller to restate the desired change. "
+    "Otherwise make no edits and return the required completion report with "
+    "`status: BLOCKED` and the specific missing or ambiguous fact. Do not return only "
+    "a summary of the evidence or target file."
+)
 _T = TypeVar("_T")
 _TOOLS: tuple[dict[str, object], ...] = (
     {
@@ -149,6 +164,7 @@ def run_openai_authoring(
     total_tokens = 0
     total_input_tokens = 0
     total_output_tokens = 0
+    mutation_prepared = False
     for turn in range(1, max_turns + 1):
         _check_budget(budget)
         input_bound = _token_bound({"messages": messages, "tools": _TOOLS})
@@ -212,6 +228,8 @@ def run_openai_authoring(
                     raise _limit_from_budget(error) from error
                 messages.append(tool_message)
                 events.append(event)
+                if event.get("tool") in _MUTATING_TOOLS:
+                    mutation_prepared = True
             continue
 
         if choice.get("finish_reason") != "stop":
@@ -219,6 +237,20 @@ def run_openai_authoring(
         content = assistant_message.get("content")
         if not isinstance(content, str) or not content.strip():
             raise DirectAuthoringError("model returned no authoring report")
+        if not mutation_prepared and not _is_blocked_report(content):
+            if turn < max_turns:
+                messages.append({"role": "user", "content": _NO_PATCH_FOLLOW_UP})
+                events.append(
+                    {
+                        "type": "completion_retry",
+                        "turn": turn,
+                        "reason": "no_mutation_or_explicit_block",
+                    }
+                )
+                continue
+            raise DirectAuthoringError(
+                "model ended without a file mutation or explicit BLOCKED status"
+            )
         result = {
             "type": "result",
             "is_error": False,
@@ -232,6 +264,11 @@ def run_openai_authoring(
         return DirectAuthoringResult(result, tuple(events), total_tokens)
 
     raise DirectAuthoringError("model exceeded the configured authoring turn limit")
+
+
+def _is_blocked_report(content: str) -> bool:
+    """Return whether a no-op completion explicitly follows the BLOCKED contract."""
+    return _BLOCKED_STATUS.search(content) is not None
 
 
 def _execute_tool_call(
