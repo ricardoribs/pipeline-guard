@@ -1,0 +1,47 @@
+FROM python:3.12.12-slim-bookworm@sha256:593bd06efe90efa80dc4eee3948be7c0fde4134606dd40d8dd8dbcade98e669c
+
+ARG UV_VERSION=0.13.6
+ARG DBT_CORE_VERSION=1.12.6
+ARG DBT_DUCKDB_VERSION=1.11.1
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIPELINE_GUARD_ROOT=/opt/pipeline-guard \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_NO_PROGRESS=1 \
+    VIRTUAL_ENV=/opt/pipeline-guard/.venv \
+    PATH=/opt/pipeline-guard/.venv/bin:/usr/local/bin:/usr/bin:/bin
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates git \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir "uv==${UV_VERSION}"
+
+RUN groupadd --gid 10001 pipeline-guard \
+    && useradd \
+        --uid 10001 \
+        --gid 10001 \
+        --create-home \
+        --home-dir /home/pipeline-guard \
+        --shell /usr/sbin/nologin \
+        pipeline-guard
+
+WORKDIR /opt/pipeline-guard
+COPY . /opt/pipeline-guard
+
+RUN uv sync --locked --no-dev --python /usr/local/bin/python \
+    && uv pip install \
+        --python /opt/pipeline-guard/.venv/bin/python \
+        "dbt-core==${DBT_CORE_VERSION}" \
+        "dbt-duckdb==${DBT_DUCKDB_VERSION}" \
+    && mkdir --parents \
+        /home/pipeline-guard/.cache \
+        /home/pipeline-guard/work \
+    && chown --recursive 10001:10001 \
+        /home/pipeline-guard \
+        /opt/pipeline-guard
+
+USER 10001:10001
+WORKDIR /home/pipeline-guard/work
+
+CMD ["python", "/opt/pipeline-guard/scripts/unattended_cli.py", "--help"]
