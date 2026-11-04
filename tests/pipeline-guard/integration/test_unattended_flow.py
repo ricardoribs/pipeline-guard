@@ -19,6 +19,7 @@ import scripts.unattended_cli as unattended_cli  # noqa: E402
 from scripts.authoring_runner import AuthoringLimitReached, AuthoringResult  # noqa: E402
 from scripts.execution_budget import ExecutionBudgetExceeded  # noqa: E402
 from scripts.git_executor import GitExecutionResult  # noqa: E402
+from scripts.patch_validator import PatchValidationError  # noqa: E402
 from scripts.pr_policy_gate import PRPolicyDecision  # noqa: E402
 from scripts.pr_publication import DraftPRPublication, PRPublicationError  # noqa: E402
 from scripts.test_executor import (  # noqa: E402
@@ -203,6 +204,7 @@ def _services(
     publication_error: BaseException | None = None,
     push_error: BaseException | None = None,
     prepare_error: BaseException | None = None,
+    patch_validation_error: BaseException | None = None,
     existing_draft: dict[str, object] | None = None,
     committed_patch: bool = False,
     authorization_state_dir: Path | None = None,
@@ -261,6 +263,8 @@ def _services(
         )
 
     def validate(*_args: object, **_kwargs: object):
+        if patch_validation_error is not None:
+            raise patch_validation_error
         patch_hash = "sha256:" + "b" * 64
         return (
             b"diff --git a/models/orders.sql b/models/orders.sql\n",
@@ -345,6 +349,7 @@ def _run(
     publication_error: BaseException | None = None,
     push_error: BaseException | None = None,
     prepare_error: BaseException | None = None,
+    patch_validation_error: BaseException | None = None,
     existing_draft: dict[str, object] | None = None,
     committed_patch: bool = False,
 ) -> tuple[dict[str, Any], dict[str, int], FakeWorkspace, UnattendedPreflightResult]:
@@ -359,6 +364,7 @@ def _run(
         publication_error=publication_error,
         push_error=push_error,
         prepare_error=prepare_error,
+        patch_validation_error=patch_validation_error,
         existing_draft=existing_draft,
         committed_patch=committed_patch,
     )
@@ -424,6 +430,26 @@ def test_workspace_execution_error_preserves_sanitized_detail(
         "Git clone failed; check repository access and the configured base branch"
     )
     assert workspace.discarded is False
+
+
+def test_patch_validation_error_preserves_sanitized_detail(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result, _, workspace, _ = _run(
+        tmp_path,
+        monkeypatch,
+        patch_validation_error=PatchValidationError(
+            "applied_patch must be non-empty bytes from the prepared workspace"
+        ),
+    )
+
+    assert result["outcome"] == "BLOCKED"
+    assert result["reason_code"] == "CHANGE_LIMIT_EXCEEDED"
+    assert result["limitations"][-1] == (
+        "applied_patch must be non-empty bytes from the prepared workspace"
+    )
+    assert workspace.discarded is True
 
 
 def test_existing_draft_is_reused_only_after_diagnosis_and_authorization(

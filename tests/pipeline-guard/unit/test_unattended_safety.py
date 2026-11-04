@@ -87,10 +87,12 @@ def test_secrets_are_absent_from_pr_summary_stdout_and_artifacts(
             "base_commit": "a" * 40,
             "external_reference": "run-1",
         },
+        approved_read_paths=["models/orders.sql"],
         safety={"editable_paths": ["models/**"]},
         secret_values=[secret],
     )
     assert secret not in prompt
+    assert '"approved_read_paths": ["models/orders.sql"]' in prompt
 
     terminal = {
         "schema_version": "1.0",
