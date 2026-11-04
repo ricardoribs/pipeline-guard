@@ -134,3 +134,28 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: "false"
+
+  container:
+    name: Build unattended container
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build image
+        run: >-
+          docker build
+          --file Dockerfile.unattended
+          --tag pipeline-guard-unattended:test
+          .
+
+      - name: Verify non-root runtime and required tools
+        run: |
+          test "$(docker run --rm pipeline-guard-unattended:test id -u)" = "10001"
+          test "$(docker run --rm pipeline-guard-unattended:test id -g)" = "10001"
+          docker run --rm pipeline-guard-unattended:test sh -c 'test ! -w "$PIPELINE_GUARD_ROOT"'
+          docker run --rm pipeline-guard-unattended:test python --version
+          docker run --rm pipeline-guard-unattended:test uv --version
+          docker run --rm pipeline-guard-unattended:test git --version
+          docker run --rm pipeline-guard-unattended:test dbt --version
