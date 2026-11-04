@@ -177,6 +177,18 @@ def _render_summary(result: Mapping[str, Any]) -> str:
         lines.append(f"- Reason: `{reason}`")
     lines += ["", "## Diagnosis", "", diagnosis_text]
 
+    original_summary = result.get("summary")
+    if (
+        outcome == "ERROR"
+        and isinstance(original_summary, str)
+        and original_summary.strip()
+        and original_summary.strip() != "Pending."
+        and not original_summary.lstrip().startswith(
+            "# Pipeline Guard unattended result"
+        )
+    ):
+        lines += ["", "## Error details", "", original_summary.strip()]
+
     host_run = result.get("host_run")
     if isinstance(host_run, Mapping):
         related = host_run.get("related_failed_steps")
