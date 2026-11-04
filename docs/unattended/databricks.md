@@ -1,35 +1,44 @@
 # Databricks Jobs setup
 
-> Validation pending: reconcile this draft with the spec 023 reference bundle and record the
-> end-to-end sandbox evidence before declaring the guide production-validated.
+> End-to-end unattended remediation validated in a Databricks Free Edition sandbox on 2026-11-04.
+> The recorded flow collected a controlled dbt failure, invoked an isolated runner identity,
+> diagnosed and automatically authored the bounded fix, passed project validation, pushed the
+> restricted incident branch, and published a Bitbucket draft PR. A person marked the draft ready
+> and merged it; a later reference run passed. This is sandbox evidence, not permission to merge,
+> deploy, or rerun automatically.
 
 ## Prerequisites and installation
 
-- Install `pipeline-guard` in the immutable Stage B image and make its root available as
-  `PIPELINE_GUARD_ROOT`; the job must also provide Python 3.12+, `uv`, and Git. Claude Code 2.1.295+
-  is required only when `runtime.model.provider` is `anthropic`.
+- Make `pipeline-guard` available to Stage B from an immutable image or a checkout pinned to an
+  immutable commit, and expose its root as `PIPELINE_GUARD_ROOT`; the job must also provide Python
+  3.12+, `uv`, and Git. The validated serverless runner used a pinned plugin commit. Claude Code
+  2.1.295+ is required only when `runtime.model.provider` is `anthropic`.
 - Commit a validated `config/pipeline-guard.yaml` to the consumer repository. Begin with
   `unattended.remediation_enabled: false`, verify report-only execution, then enable remediation in
   a reviewed configuration change.
 - Use a Databricks runtime or custom container that passed the selected model-backend compute
-  spike. The exact runtime, access mode, egress rules, and non-root identity remain pending sandbox
-  validation.
+  spike. The validated reference used serverless Default Automated Compute, Python 3.12, outbound
+  access to the declared Git and model endpoints, and least-privilege service principals. Repeat
+  the sandbox validation when changing runtime, access mode, egress, or identity boundaries.
 - Create one retained Volume location for inputs/results, one durable authorization-state location,
   and an ephemeral local-disk workspace parent. They must be distinct from the checkout.
 
 ## Architecture
 
-Use a Databricks Asset Bundle with the failed workload followed by two failure-path tasks:
+Use a Databricks Asset Bundle with a reference job and a separately permissioned runner job:
 
 - `pipeline_guard_context` (Stage A) runs only after failure, uses a read-only service principal,
   calls Jobs APIs, identifies the upstream-most failed task, and writes incident/artifacts to a
   retained Volume.
-- `pipeline_guard` (Stage B) depends on Stage A, runs in approved isolated compute as an
-  unprivileged user, and invokes `unattended_cli.py` once.
-- `fail_gate` preserves the job run as failed regardless of the repair outcome.
+- `launch_pipeline_guard` depends on Stage A and passes only non-secret run identifiers to the
+  separate runner job.
+- `pipeline_guard` (Stage B) runs as a distinct least-privilege service principal in approved
+  isolated compute and invokes `unattended_cli.py` once.
 
 Disable retries, including serverless auto-optimization retries, for Stage A and Stage B. Exclude
-branches under `repository.remediation_branch_prefix` in the job trigger or collector.
+branches under `repository.remediation_branch_prefix` in the job trigger or collector. The failed
+workload task remains failed even when downstream collection and remediation succeed; depending on
+the job graph, Databricks may summarize the parent run as `Succeeded with failures`.
 
 ## Identities and permissions
 
@@ -89,23 +98,23 @@ resources:
           run_if: AT_LEAST_ONE_FAILED
           spark_python_task:
             python_file: ./scripts/collect_failed_run.py
-        - task_key: pipeline_guard
+        - task_key: launch_pipeline_guard
           depends_on:
             - task_key: pipeline_guard_context
           run_if: ALL_SUCCESS
+          run_job_task:
+            job_id: ${resources.jobs.pipeline_guard_runner.id}
+    pipeline_guard_runner:
+      tasks:
+        - task_key: pipeline_guard
           spark_python_task:
             python_file: ./scripts/run_pipeline_guard.py
-        - task_key: fail_gate
-          depends_on:
-            - task_key: pipeline_guard
-          run_if: ALL_DONE
-          spark_python_task:
-            python_file: ./scripts/preserve_failed_status.py
 ```
 
-The validated reference bundle must replace this outline with its exact compute and dependency
-configuration. Stage A records `{{job.run_id}}`, repair count, task run identity, failed commit, and
-branch in host-neutral fields rather than adding Databricks-specific fields to the contract.
+This abbreviated outline omits run parameters, permissions, environments, and compute settings.
+The deployed bundle must pin those values and keep the collector and runner identities separate.
+Stage A records `{{job.run_id}}`, repair count, task run identity, failed commit, and branch in
+host-neutral fields rather than adding Databricks-specific fields to the contract.
 Any project-declared validation command used by the repair must target an isolated, non-production
 catalog and schema with least-privilege credentials. This is separate from the failed workload's
 target: Pipeline Guard executes declared commands as written and does not infer their side effects.
@@ -141,6 +150,6 @@ uv run "$PIPELINE_GUARD_ROOT/scripts/unattended_cli.py" \
   "$RUN_VOLUME/input/incident.json"
 ```
 
-Retain `result.json`, `summary.md`, and `artifacts/`. The task reports the repair exit code but the
-sentinel keeps the original job failure visible. See [the common guide](README.md) for outcomes and
-troubleshooting.
+Retain `result.json`, `summary.md`, and `artifacts/`. Stage B reports the repair exit code while the
+original workload task remains failed in the reference run. See [the common guide](README.md) for
+outcomes and troubleshooting.

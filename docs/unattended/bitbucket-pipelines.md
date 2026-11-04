@@ -1,7 +1,10 @@
 # Bitbucket Pipelines setup
 
-> Smoke validation pending: copy the final example from the sandbox only after recording the
-> failure trigger, recursion exclusion, retained result, and minimum token permissions.
+> Report-only smoke validated on Bitbucket Cloud on 2026-11-04. The recorded run covered a
+> controlled dbt failure, read-only API collection, retained output, deployment-scoped minimum
+> credentials, and the `pipeline-guard/**` recursion exclusion. Bitbucket-hosted unattended
+> remediation remains pending because it additionally requires durable create-once authorization
+> state, restricted push/publication credentials, and an eligible-failure smoke run.
 
 ## Prerequisites and installation
 
@@ -16,10 +19,31 @@ Project-declared validation commands must use isolated, non-production targets a
 credentials whenever they can modify a warehouse or another external system. Pipeline Guard runs
 the commands as written and does not infer their side effects.
 
-Configure Bitbucket secured variables or an external secret manager for model access, read-only
-collection, restricted branch push, draft-PR publication, and the policy secret. Do not pass secret
-values as command arguments. Provide retained input/output storage and a create-once-capable
-authorization-state store that survives separate pipeline containers.
+For report-only execution, configure deployment-scoped secured variables for model access and
+read-only collection. Before enabling remediation, separately configure restricted branch push,
+draft-PR publication, and the policy secret. Do not pass secret values as command arguments.
+Remediation also requires a create-once-capable authorization-state store that survives separate
+pipeline containers; Bitbucket artifacts and a fresh container-local directory do not satisfy that
+boundary.
+
+## Validated report-only boundary
+
+The sandbox validation used the immutable non-root image
+`ghcr.io/ricardoribs/pipeline-guard-unattended@sha256:5836ea799c6466517ea019fec40a3f174f689a4805690122d7c945a9d24f3d11`
+and `unattended.remediation_enabled: false`. The controlled reference step exported only its
+pipeline UUID, step UUID, commit, branch, build number, and a boolean failure flag. A separate
+collector deployment then:
+
+1. authenticated with a repository token limited to Repository Read and Pipelines Read;
+2. verified the failed step and source revision through the Bitbucket API;
+3. reproduced the named dbt test at that same revision without retaining raw logs;
+4. published `target/manifest.json`, `target/run_results.json`, and a contract-valid incident; and
+5. passed those artifacts to a runner deployment containing only the model credential.
+
+The runner returned `REPORT_ONLY` with `REMEDIATION_DISABLED` and retained
+`.pipeline-guard/output/**`. A temporary `pipeline-guard/recursion-guard-smoke` branch executed only
+the no-op recursion guard. No push token, draft-PR token, policy secret, or authorization-state
+directory was present in this report-only validation.
 
 ## Required boundaries
 
@@ -79,8 +103,8 @@ sandbox. Where the native completed-pipeline trigger is unavailable, use `after-
 call a small authenticated dispatcher/API endpoint; do not run the full repair in `after-script`,
 and pass the failed pipeline and step UUIDs rather than log content.
 
-Stage A reads `BITBUCKET_TRIGGER_PIPELINE_UUID` and
-`BITBUCKET_TRIGGER_PIPELINE_STEP_UUID`, obtains the failed commit/branch/steps/log using the
+Stage A reads `PIPELINE_GUARD_TRIGGER_PIPELINE_UUID` and
+`PIPELINE_GUARD_TRIGGER_STEP_UUID`, obtains the failed commit/branch/steps/log using the
 read-only token, explicitly checks out that commit, regenerates declared dbt artifacts, hashes
 them, and validates incident 1.1. It must not print API responses or environment variables.
 

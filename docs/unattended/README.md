@@ -1,14 +1,17 @@
 # Unattended Pipeline Guard
 
-Pipeline Guard can diagnose a failed pipeline and, when versioned project policy explicitly
-allows it, prepare a bounded correction and publish a draft pull request without waiting for a
-person. The failed pipeline remains failed; the plugin never merges, deploys, reruns a pipeline,
-or changes data.
+Pipeline Guard can automatically diagnose a failed pipeline and, when versioned project policy
+explicitly allows it, author and validate a bounded correction, push its incident branch, and
+publish a draft pull request without an interactive approval step. A person still controls the
+policy change that enables remediation and reviews and merges the resulting draft. The plugin does
+not rewrite the original failed task or operation as successful, and it never merges, deploys,
+reruns a pipeline, or changes data.
 
-> Host validation status: the local implementation is available. Databricks end-to-end and the
-> Bitbucket Pipelines and Airflow smoke validations described in the
-> [unattended specification](../specs/pipeline-guard/unattended/spec.md) must still be recorded
-> before these host guides are treated as production-validated.
+> Host validation status: Databricks end-to-end unattended remediation and the Bitbucket Pipelines
+> report-only boundary have been validated in their sandboxes. Bitbucket-hosted remediation and
+> the Airflow smoke validation described in the
+> [unattended specification](../specs/pipeline-guard/unattended/spec.md) remain pending. These are
+> sandbox results, not production certification; repeat the applicable validation before adoption.
 
 ## Choose a guide
 
