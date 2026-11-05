@@ -7,11 +7,12 @@ policy change that enables remediation and reviews and merges the resulting draf
 not rewrite the original failed task or operation as successful, and it never merges, deploys,
 reruns a pipeline, or changes data.
 
-> Host validation status: Databricks end-to-end unattended remediation and the Bitbucket Pipelines
-> report-only boundary have been validated in their sandboxes. Bitbucket-hosted remediation and
-> the Airflow smoke validation described in the
-> [unattended specification](../specs/pipeline-guard/unattended/spec.md) remain pending. These are
-> sandbox results, not production certification; repeat the applicable validation before adoption.
+> Release status: [`unattended-v1.0.0`](https://github.com/ricardoribs/pipeline-guard/releases/tag/unattended-v1.0.0)
+> is pinned to commit `b2bcad1b3267d216c97942685a2ac0a68657e91b`. Databricks end-to-end
+> unattended remediation, its reference scenario matrix, and the Bitbucket Pipelines report-only
+> boundary have been validated in their sandboxes. Bitbucket-hosted remediation and Airflow smoke
+> validation remain pending. These are sandbox results, not production certification; repeat the
+> applicable validation before adoption.
 
 ## Choose a guide
 

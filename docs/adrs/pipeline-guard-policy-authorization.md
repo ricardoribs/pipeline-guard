@@ -22,9 +22,10 @@ The unattended mode can start a repair when a person is not available to approve
 for example during a host's overnight run. A repair must not occur merely because a failure
 exists: it needs verifiable authorization tied to the diagnosis and base commit to be repaired.
 
-Decisions 7 and 8 of the core specification separate trust boundaries: orchestrated approvals must be
+The documented architecture separates trust boundaries: orchestrated approvals must be
 authenticated by the host, while local approvals belong exclusively to an interactive session.
-The unattended specification defines a versioned project policy as the authorization channel for unattended mode.
+The unattended contract defines a versioned project policy as the authorization channel for
+unattended mode.
 
 ## Decision
 
@@ -75,7 +76,7 @@ workspace is created.
 A consumed authorization is never made valid again, so the same signed authorization cannot be
 presented again to authorize another write. A retry can issue a new authorization for its
 execution; repeated failures and draft PR reuse are instead deduplicated by the failure signature
-and the draft-PR reconciliation defined in Decision 7 of the unattended specification's research.
+and the private publisher's deterministic draft-PR reconciliation.
 
 ### Alternatives Considered
 
@@ -91,7 +92,7 @@ and the draft-PR reconciliation defined in Decision 7 of the unattended specific
 - **Pros:** simpler implementation while retaining human review before merge.
 - **Cons:** it would allow a repair to be created without verifiable authorization before writing
   to the repository.
-- **Rejected because:** it breaks the core specification's invariant that every remediation must have approval
+- **Rejected because:** it breaks the core safety invariant that every remediation must have approval
   tied to the diagnosis and base commit.
 
 ## Consequences
@@ -126,7 +127,7 @@ and the draft-PR reconciliation defined in Decision 7 of the unattended specific
 
 ## Related
 
-- [Approval contract](../../contracts/schema/approval_input_v1.schema.json) and [policy profile](../specs/pipeline-guard/unattended/contracts/approval_input_v1.policy_profile.schema.json).
+- [Approval contract](../../contracts/schema/approval_input_v1.schema.json) and [policy profile](../../contracts/schema/approval_input_v1.policy_profile.schema.json).
 
-- [Unattended CLI contract](../specs/pipeline-guard/unattended/contracts/unattended-cli.md).
+- [Unattended execution guide](../unattended/README.md#local-and-unattended-flows).
 

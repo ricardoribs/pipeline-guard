@@ -37,7 +37,7 @@ jobs:
       - name: Run offline tests and collect deterministic-gate coverage
         run: |
           mkdir -p test-results
-          uv run pytest -m "not api" tests/pipeline-guard tests/specs -q \
+          uv run pytest -m "not api" tests/pipeline-guard tests/contracts -q \
             --junitxml=test-results/junit.xml \
             --cov=scripts.eligibility_gate \
             --cov=scripts.approval_validator \

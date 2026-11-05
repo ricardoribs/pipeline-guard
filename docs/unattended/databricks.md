@@ -1,11 +1,30 @@
 # Databricks Jobs setup
 
-> End-to-end unattended remediation validated in a Databricks Free Edition sandbox on 2026-11-04.
-> The recorded flow collected a controlled dbt failure, invoked an isolated runner identity,
-> diagnosed and automatically authored the bounded fix, passed project validation, pushed the
-> restricted incident branch, and published a Bitbucket draft PR. A person marked the draft ready
-> and merged it; a later reference run passed. This is sandbox evidence, not permission to merge,
-> deploy, or rerun automatically.
+> End-to-end unattended remediation and the reference scenario matrix were validated in a
+> Databricks Free Edition sandbox on 2026-11-04 and 2026-11-05. The recorded flows collected
+> controlled dbt failures, invoked an isolated runner identity, produced safe report-only outcomes
+> for non-eligible failures, and automatically authored bounded fixes for eligible code failures.
+> Each published correction passed project validation and used a restricted incident branch and a
+> Bitbucket draft PR. A person reviewed and merged each accepted draft before a healthy reference
+> rerun. This is sandbox evidence, not permission to merge, deploy, or rerun automatically.
+
+## Validated scenario matrix
+
+The release validation used synthetic data and covered these independent outcomes:
+
+| Scenario | Expected and observed outcome |
+| --- | --- |
+| Healthy reference execution | Reference task passed; collection and remediation tasks did not run |
+| Source permission denied | `ACCESS_PERMISSION`, report only, no branch or pull request |
+| Accepted-values mismatch | `DATA`, report only, no branch or pull request |
+| Inverted singular test | `CODE`, validated draft pull request, healthy run after human merge |
+| Missing column | `CODE`, validated draft pull request, healthy run after human merge |
+| Missing model reference | `CODE`, validated draft pull request, healthy run after human merge |
+| SQL syntax error | `CODE`, validated draft pull request, healthy run after human merge |
+
+An earlier baseline SQL failure exercised the same bounded publication and recovery path. Together,
+these runs cover successful execution, non-eligible safe stops, eligible authoring, publication,
+human-controlled merge, and post-merge recovery.
 
 ## Prerequisites and installation
 
