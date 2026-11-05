@@ -26,6 +26,20 @@ Remediation also requires a create-once-capable authorization-state store that s
 pipeline containers; Bitbucket artifacts and a fresh container-local directory do not satisfy that
 boundary.
 
+## Released image
+
+Release [`unattended-v1.0.0`](https://github.com/ricardoribs/pipeline-guard/releases/tag/unattended-v1.0.0)
+is available as a commit-pinned image:
+
+```text
+ghcr.io/ricardoribs/pipeline-guard-unattended:b2bcad1b3267d216c97942685a2ac0a68657e91b
+ghcr.io/ricardoribs/pipeline-guard-unattended@sha256:e7065e747ade6f9f034ba013f8f4dff344d1b5fcda574c6b7e9553f9024f6912
+```
+
+Prefer the immutable digest in a deployment. The digest in the validation record below is retained
+deliberately as evidence of the exact earlier report-only smoke image; it is not the current release
+recommendation.
+
 ## Validated report-only boundary
 
 The sandbox validation used the immutable non-root image

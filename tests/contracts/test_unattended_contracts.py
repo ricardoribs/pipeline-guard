@@ -7,10 +7,11 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SPEC_CONTRACTS = (
-    REPO_ROOT / "docs" / "specs" / "pipeline-guard" / "unattended" / "contracts"
+SCHEMA_CONTRACTS = REPO_ROOT / "contracts" / "schema"
+UNATTENDED_GUIDE = REPO_ROOT / "docs" / "unattended" / "README.md"
+AUTHORIZATION_ADR = (
+    REPO_ROOT / "docs" / "adrs" / "pipeline-guard-policy-authorization.md"
 )
-PLUGIN_CONTRACTS = REPO_ROOT / "contracts" / "schema"
 
 
 def _load_schema(path: Path) -> dict[str, Any]:
@@ -21,11 +22,12 @@ def _load_schema(path: Path) -> dict[str, Any]:
 
 
 def test_unattended_cli_contract_transports_durable_authorization_state() -> None:
-    contract = (SPEC_CONTRACTS / "unattended-cli.md").read_text(encoding="utf-8")
+    guide = UNATTENDED_GUIDE.read_text(encoding="utf-8")
+    authorization_contract = AUTHORIZATION_ADR.read_text(encoding="utf-8")
 
-    assert '--authorization-state-dir "<durable-host-state-dir>"' in contract
-    assert "Quando `unattended.remediation_enabled: true`" in contract
-    assert "create-once" in contract
+    assert "--authorization-state-dir" in guide
+    assert "`unattended.remediation_enabled` is `false`" in guide
+    assert "create-once" in authorization_contract
 
 
 def test_airflow_run_reference_is_valid_for_incident_and_policy_approval() -> None:
@@ -59,15 +61,15 @@ def test_airflow_run_reference_is_valid_for_incident_and_policy_approval() -> No
     }
 
     incident_validator = Draft202012Validator(
-        _load_schema(SPEC_CONTRACTS / "incident_input_v1.schema.json"),
+        _load_schema(SCHEMA_CONTRACTS / "incident_input_v1.schema.json"),
         format_checker=FormatChecker(),
     )
     approval_validator = Draft202012Validator(
-        _load_schema(PLUGIN_CONTRACTS / "approval_input_v1.schema.json"),
+        _load_schema(SCHEMA_CONTRACTS / "approval_input_v1.schema.json"),
         format_checker=FormatChecker(),
     )
     policy_profile_validator = Draft202012Validator(
-        _load_schema(SPEC_CONTRACTS / "approval_input_v1.policy_profile.schema.json")
+        _load_schema(SCHEMA_CONTRACTS / "approval_input_v1.policy_profile.schema.json")
     )
 
     incident_validator.validate(incident)
@@ -89,7 +91,7 @@ def test_policy_profile_rejects_actor_without_service_namespace() -> None:
         "base_commit": "a" * 40,
     }
     policy_profile_validator = Draft202012Validator(
-        _load_schema(SPEC_CONTRACTS / "approval_input_v1.policy_profile.schema.json")
+        _load_schema(SCHEMA_CONTRACTS / "approval_input_v1.policy_profile.schema.json")
     )
 
     errors = list(policy_profile_validator.iter_errors(approval))

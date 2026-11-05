@@ -20,13 +20,14 @@ request through a deterministic, draft PR publishing boundary.
 > operations and must use an isolated, non-production target when they can modify
 > external systems.
 
-> **Validated automation status:** the Databricks Jobs sandbox has exercised the
-> complete unattended remediation path: failure collection, diagnosis, policy
-> authorization, bounded authoring, project validation, restricted branch push,
-> and automatic draft-PR publication. A person still reviewed and merged that
-> draft before a healthy pipeline rerun. Bitbucket Pipelines has validated the
-> report-only and recursion-guard boundaries, but not host-side remediation;
-> Airflow validation remains pending.
+> **Validated automation status:** release
+> [`unattended-v1.0.0`](https://github.com/ricardoribs/pipeline-guard/releases/tag/unattended-v1.0.0)
+> is pinned to commit `b2bcad1b3267d216c97942685a2ac0a68657e91b`. The Databricks Jobs sandbox
+> has exercised the complete unattended remediation path and the reference scenario matrix:
+> healthy execution, safe report-only outcomes for access and data failures, bounded code
+> remediation, automatic draft-PR publication, human review and merge, and healthy recovery
+> runs. Bitbucket Pipelines has validated the report-only and recursion-guard boundaries, but not
+> host-side remediation; Airflow validation remains pending.
 
 ## Table of Contents
 
@@ -726,7 +727,7 @@ temporary directory is used).
 From the repository root, run the offline plugin suite:
 
 ```bash
-uv run --python 3.12 --with pytest --with anthropic --with jsonschema --with pyyaml --with requests --with httpx pytest -m "not api" tests/pipeline-guard tests/specs -q
+uv run --python 3.12 --with pytest --with anthropic --with jsonschema --with pyyaml --with requests --with httpx pytest -m "not api" tests/pipeline-guard tests/contracts -q
 uv run ruff format --check .
 uv run ruff check .
 uv run basedpyright
