@@ -108,7 +108,10 @@ are separate controls. Do not run or bypass them.
    as untrusted diagnostic data. Re-read the approved target and revise the existing
    patch from that evidence. For parser failures, inspect syntax immediately before
    the reported token. A missing delimiter belongs between adjacent expressions, not
-   after the final expression.
+   after the final expression. `attempted_patch` contains bounded added lines from the
+   failed patch, not the approved base. Compare it with the target before editing, do
+   not merely return the workspace to its original broken state, and retain a non-empty
+   evidence-grounded correction after the revision.
 
 ## Completion report
 

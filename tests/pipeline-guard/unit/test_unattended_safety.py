@@ -160,6 +160,12 @@ def test_secrets_are_absent_from_pr_summary_stdout_and_artifacts(
                     "failure_summary": f"parser stopped near label; value={secret}",
                 }
             ],
+            "attempted_patch": [
+                {
+                    "path": "models/orders.sql",
+                    "added_lines": f"select '{secret}' as leaked_value",
+                }
+            ],
         },
     )
     assert secret not in feedback_with_secret
@@ -178,7 +184,13 @@ def test_secrets_are_absent_from_pr_summary_stdout_and_artifacts(
                 )
             ],
             validation_status="HAS_FAILURES",
-        )
+        ),
+        patch_files=[
+            {
+                "path": "models/orders.sql",
+                "changed_content": "'missing comma' as label,",
+            }
+        ],
     )
     assert bounded_feedback["commands"] == [
         {
@@ -186,6 +198,32 @@ def test_secrets_are_absent_from_pr_summary_stdout_and_artifacts(
             "status": "FAILED",
             "failure_summary": "Database Error: syntax error near label",
         }
+    ]
+    assert bounded_feedback["attempted_patch"] == [
+        {
+            "path": "models/orders.sql",
+            "added_lines": "'missing comma' as label,",
+        }
+    ]
+    assert "not the approved base" in bounded_feedback["instruction"]
+    assert "non-empty evidence-grounded correction" in bounded_feedback["instruction"]
+
+    truncated_feedback = _validation_feedback(
+        ValidationExecutionResult(
+            run_id="run-1",
+            results=[],
+            validation_status="HAS_FAILURES",
+        ),
+        patch_files=[
+            {"path": "models/first.sql", "changed_content": "a" * 3_000},
+            {"path": "models/second.sql", "changed_content": "b" * 3_000},
+        ],
+    )
+    assert [
+        len(item["added_lines"]) for item in truncated_feedback["attempted_patch"]
+    ] == [
+        3_000,
+        1_000,
     ]
 
     terminal = {

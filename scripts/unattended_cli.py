@@ -106,6 +106,7 @@ _T = TypeVar("_T")
 _VALIDATION_CONTEXT_ENVIRONMENT_ALLOWLIST = frozenset(
     {"PIPELINE_GUARD_VALIDATION_SCENARIO"}
 )
+_MAX_VALIDATION_PATCH_FEEDBACK_CHARACTERS = 4_000
 
 
 class UnattendedExecutionError(RuntimeError):
@@ -830,7 +831,10 @@ def _validate_patch_with_single_revision(
         budget=budget,
         runtime=runtime,
         environment=environment,
-        validation_feedback=_validation_feedback(test_result),
+        validation_feedback=_validation_feedback(
+            test_result,
+            patch_files=patch_files,
+        ),
     )
     test_result = services.execute_tests(
         config=config,
@@ -1418,7 +1422,11 @@ def _authoring_prompt(
     return serialized
 
 
-def _validation_feedback(value: TestExecutorResult) -> dict[str, Any]:
+def _validation_feedback(
+    value: TestExecutorResult,
+    *,
+    patch_files: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
     """Build bounded, credential-free feedback for one local patch revision."""
     commands: list[dict[str, Any]] = []
     for item in value.results:
@@ -1426,11 +1434,36 @@ def _validation_feedback(value: TestExecutorResult) -> dict[str, Any]:
         if item.failure_summary is not None:
             command["failure_summary"] = item.failure_summary
         commands.append(command)
+    attempted_patch: list[dict[str, str]] = []
+    remaining_characters = _MAX_VALIDATION_PATCH_FEEDBACK_CHARACTERS
+    for item in patch_files:
+        path = item.get("path")
+        changed_content = item.get("changed_content")
+        if (
+            not isinstance(path, str)
+            or not isinstance(changed_content, str)
+            or remaining_characters <= 0
+        ):
+            continue
+        bounded_content = changed_content[:remaining_characters]
+        remaining_characters -= len(bounded_content)
+        attempted_patch.append(
+            {
+                "path": path,
+                "added_lines": bounded_content,
+            }
+        )
+
     return {
         "instruction": (
             "The current uncommitted patch failed declared validation. Re-read the "
             "approved target and revise the existing patch once. Do not repeat an "
-            "unsupported assumption. For parser failures, inspect syntax immediately "
+            "unsupported assumption. attempted_patch contains only the bounded added "
+            "lines from the current failed patch, not the approved base. Compare those "
+            "lines with the target before editing, and do not satisfy the revision by "
+            "merely returning the workspace to its original broken state. The final "
+            "workspace must retain a non-empty evidence-grounded correction. "
+            "For parser failures, inspect syntax immediately "
             "before the reported token because the highlighted token may only be where "
             "parsing stopped. Place a missing delimiter between adjacent expressions, "
             "not after the final expression. Preserve literal and identifier semantics "
@@ -1439,6 +1472,7 @@ def _validation_feedback(value: TestExecutorResult) -> dict[str, Any]:
         ),
         "validation_status": value.validation_status,
         "commands": commands,
+        "attempted_patch": attempted_patch,
     }
 
 
