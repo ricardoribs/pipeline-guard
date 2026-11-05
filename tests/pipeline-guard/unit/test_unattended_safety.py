@@ -19,7 +19,10 @@ from scripts.test_executor import (  # noqa: E402
 from scripts.test_executor import (
     TestExecutorResult as ValidationExecutionResult,
 )
-from scripts.unattended_cli import _authoring_prompt  # noqa: E402
+from scripts.unattended_cli import (  # noqa: E402
+    _authoring_prompt,
+    _validation_feedback,
+)
 from scripts.unattended_result import write_unattended_result  # noqa: E402
 
 
@@ -133,6 +136,57 @@ def test_secrets_are_absent_from_pr_summary_stdout_and_artifacts(
         "validation_status": "HAS_FAILURES",
         "commands": [{"name": "build", "status": "FAILED"}],
     }
+
+    feedback_with_secret = _authoring_prompt(
+        _incident(secret),
+        diagnosis=_diagnosis(secret),
+        evidences=[],
+        authorization={
+            "incident_id": "incident-safe-1",
+            "diagnosis_hash": "sha256:diagnosis",
+            "actor": "sp:pipeline-guard",
+            "base_commit": "a" * 40,
+            "external_reference": "run-1",
+        },
+        approved_read_paths=["models/orders.sql"],
+        safety={"editable_paths": ["models/**"]},
+        secret_values=[secret],
+        validation_feedback={
+            "validation_status": "HAS_FAILURES",
+            "commands": [
+                {
+                    "name": "build",
+                    "status": "FAILED",
+                    "failure_summary": f"parser stopped near label; value={secret}",
+                }
+            ],
+        },
+    )
+    assert secret not in feedback_with_secret
+    assert "parser stopped near label" in feedback_with_secret
+
+    bounded_feedback = _validation_feedback(
+        ValidationExecutionResult(
+            run_id="run-1",
+            results=[
+                CommandResult(
+                    "build",
+                    "FAILED",
+                    1.0,
+                    None,
+                    "Database Error: syntax error near label",
+                )
+            ],
+            validation_status="HAS_FAILURES",
+        )
+    )
+    assert bounded_feedback["commands"] == [
+        {
+            "name": "build",
+            "status": "FAILED",
+            "failure_summary": "Database Error: syntax error near label",
+        }
+    ]
 
     terminal = {
         "schema_version": "1.0",

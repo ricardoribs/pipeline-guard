@@ -270,6 +270,36 @@ def test_declared_command_records_status_fail(monkeypatch):
     result = executor.run(["fake-check"])
 
     assert result.results[0].status == "FAILED"
+    assert result.results[0].failure_summary == "error"
+
+
+def test_failed_command_records_bounded_redacted_feedback(monkeypatch):
+    secret = "should-not-survive"
+    monkeypatch.setattr(
+        _test_executor_module.subprocess,
+        "Popen",
+        _popen_returning(
+            returncode=1,
+            stdout="x" * 5_000,
+            stderr=(
+                f"\x1b[31mpassword={secret}\x1b[0m\n"
+                "Database Error: syntax error near 'missing comma'"
+            ),
+        ),
+    )
+
+    result = TestExecutor(FAKE_CONFIG, run_id="run-bounded-feedback").run(
+        ["fake-check"]
+    )
+
+    summary = result.results[0].failure_summary
+    assert summary is not None
+    assert secret not in summary
+    assert "[REDACTED_SECRET]" in summary
+    assert "\x1b" not in summary
+    assert "syntax error near 'missing comma'" in summary
+    assert summary.startswith("[earlier validation output truncated]")
+    assert len(summary) <= 4_100
 
 
 def test_declared_command_records_log_ref_with_store(monkeypatch):

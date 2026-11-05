@@ -63,6 +63,7 @@ class CommandResult:
     status: str  # "PASSED", "FAILED", or "TIMEOUT"
     duration_seconds: float
     log_ref: str | None
+    failure_summary: str | None = None
 
 
 @dataclass
@@ -70,6 +71,21 @@ class TestExecutorResult:
     run_id: str
     results: list[CommandResult]
     validation_status: str  # "ALL_PASSED", "HAS_FAILURES", or "INCOMPLETE"
+
+
+_MAX_FAILURE_SUMMARY_CHARS = 4_000
+_ANSI_ESCAPE_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
+
+
+def _bounded_failure_summary(log_text: str) -> str | None:
+    """Return a small sanitized tail suitable for untrusted validation feedback."""
+    sanitized = _ANSI_ESCAPE_RE.sub("", _redact_fn(log_text)).replace("\x00", "")
+    if len(sanitized) > _MAX_FAILURE_SUMMARY_CHARS:
+        sanitized = (
+            "[earlier validation output truncated]\n"
+            + sanitized[-_MAX_FAILURE_SUMMARY_CHARS:]
+        )
+    return sanitized.strip() or None
 
 
 class TestExecutor:
@@ -197,6 +213,11 @@ class TestExecutor:
                     status=status,
                     duration_seconds=duration_seconds,
                     log_ref=log_ref,
+                    failure_summary=(
+                        _bounded_failure_summary(log_text)
+                        if status in {"FAILED", "TIMEOUT"}
+                        else None
+                    ),
                 )
             )
 
