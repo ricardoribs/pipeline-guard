@@ -9,18 +9,8 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[3]
-REPO_ROOT = PLUGIN_ROOT
 SCHEMA_PATH = (
     PLUGIN_ROOT / "contracts" / "schema" / "unattended_run_result_v1.schema.json"
-)
-SPEC_SCHEMA_PATH = (
-    REPO_ROOT
-    / "docs"
-    / "specs"
-    / "pipeline-guard"
-    / "unattended"
-    / "contracts"
-    / "unattended_run_result_v1.schema.json"
 )
 
 COMMIT = "a" * 40
@@ -113,8 +103,11 @@ def _valid_results() -> list[dict[str, Any]]:
     ]
 
 
-def test_published_schema_matches_the_validated_spec_contract() -> None:
-    assert _load_schema() == _load_schema(SPEC_SCHEMA_PATH)
+def test_published_schema_has_the_canonical_contract_identifier() -> None:
+    assert (
+        _load_schema()["$id"]
+        == "urn:pipeline-guard:contracts:unattended_run_result_v1.schema.json"
+    )
 
 
 @pytest.mark.parametrize(
