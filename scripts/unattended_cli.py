@@ -103,6 +103,10 @@ from scripts.workspace_executor import (  # noqa: E402
 
 _T = TypeVar("_T")
 
+_VALIDATION_CONTEXT_ENVIRONMENT_ALLOWLIST = frozenset(
+    {"PIPELINE_GUARD_VALIDATION_SCENARIO"}
+)
+
 
 class UnattendedExecutionError(RuntimeError):
     """Operational failure with a stable terminal classification."""
@@ -798,6 +802,7 @@ def _validate_patch_with_single_revision(
         config=config,
         run_id=run_id,
         workspace=workspace,
+        environment=environment,
     )
     artifacts["test-result.json"] = _serialized_test_result(test_result)
     policy = decide_pr_publication_from_config(test_result.validation_status, config)
@@ -831,6 +836,7 @@ def _validate_patch_with_single_revision(
         config=config,
         run_id=run_id,
         workspace=workspace,
+        environment=environment,
     )
     artifacts["test-result.json"] = _serialized_test_result(test_result)
     return patch_files, patch_validation, test_result
@@ -1029,12 +1035,21 @@ def _execute_tests(
     config: Mapping[str, Any],
     run_id: str,
     workspace: WorkspaceView,
+    environment: Mapping[str, str],
 ) -> TestExecutorResult:
+    validation_environment = workspace.authorship_environment()
+    validation_environment.update(
+        {
+            name: value
+            for name, value in environment.items()
+            if name in _VALIDATION_CONTEXT_ENVIRONMENT_ALLOWLIST
+        }
+    )
     return TestExecutor(
         config,
         run_id=run_id,
         cwd=workspace.path,
-        environment=workspace.authorship_environment(),
+        environment=validation_environment,
     ).run()
 
 
