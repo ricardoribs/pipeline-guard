@@ -39,11 +39,16 @@ Todas são fornecidas pelo host a partir do seu cofre de segredos. Nenhuma apare
 |---|---|---|
 | Endpoint do modelo | `runtime.model` e as variáveis do perfil: Anthropic (`ANTHROPIC_*`), Databricks (`DATABRICKS_HOST`, `DATABRICKS_MODEL_BASE_URL`, `DATABRICKS_MODEL`, `DATABRICKS_TOKEN` ou o par `DATABRICKS_MODEL_CLIENT_ID`/`DATABRICKS_MODEL_CLIENT_SECRET`), OpenAI (`OPENAI_*`), Gemini (`GEMINI_*`), Ollama (`OLLAMA_*`) ou genéricas (`PIPELINE_GUARD_MODEL_*`) | Identidade de uso do modelo |
 | Armazenamento local de artefatos comuns do plugin | `CLAUDE_PLUGIN_DATA` | Diretório gravável do ambiente efêmero; não armazena o estado de consumo da autorização |
+| Contexto neutro dos comandos de validação | `PIPELINE_GUARD_VALIDATION_SCENARIO` | Identificador não secreto definido pelo host; é a única variável adicional herdada pelos testes declarados |
 | Push da branch de correção | a referenciada em `repository.push_credential_ref` | Identidade de escrita restrita |
 | Publicação da draft PR | as do publicador privado do Pipeline Guard para o provedor configurado (ex.: `BITBUCKET_API_TOKEN` ou `GITHUB_API_TOKEN`) | Identidade de escrita restrita |
 | Assinatura da autorização | a referenciada em `unattended.authorization_secret_ref` | Segredo do host, com pelo menos 32 bytes |
 
 No perfil `anthropic`, o entrypoint repassa ao subprocesso de autoria somente `ClonedWorkspace.authorship_environment()` mais as variáveis do endpoint do modelo. Nos perfis OpenAI-compatible, o cliente HTTP usa apenas a credencial do modelo e as ferramentas de arquivo não recebem credenciais. Credenciais de escrita e o segredo de autorização nunca são herdados por processos ou ferramentas controlados pelo modelo (FR-014).
+
+Os comandos declarados em `validation.commands` recebem o mesmo ambiente isolado, acrescido
+somente de `PIPELINE_GUARD_VALIDATION_SCENARIO` quando o host a fornece. Essa variável é contexto
+neutro, não pode conter credenciais e não é repassada ao agente de autoria.
 
 ## Ordem de execução
 

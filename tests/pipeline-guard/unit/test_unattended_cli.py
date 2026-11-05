@@ -577,7 +577,14 @@ def test_validation_uses_the_workspace_isolated_environment(
         config={"validation": {"commands": []}},
         run_id="run-isolated-tests",
         workspace=workspace,
+        environment={
+            "PIPELINE_GUARD_HOST_SECRET": "must-not-leak",
+            "PIPELINE_GUARD_VALIDATION_SCENARIO": "sql_syntax_error",
+        },
     )
 
     assert result is expected
-    assert captured["environment"] == {"PATH": "safe-path"}
+    assert captured["environment"] == {
+        "PATH": "safe-path",
+        "PIPELINE_GUARD_VALIDATION_SCENARIO": "sql_syntax_error",
+    }
